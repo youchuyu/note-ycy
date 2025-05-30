@@ -12,10 +12,10 @@ func SetupRouter() *gin.Engine {
 
 	r.LoadHTMLGlob("templates/*")
 
-	r.Static("/static", "./public")
+	r.Static("/public", "./public")
 
 	r.GET("/files", func(c *gin.Context) {
-		files, err := utils.BuildFileTree("./public/note")
+		files, err := utils.BuildFileTree("public/note")
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return

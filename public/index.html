@@ -4,44 +4,122 @@
     <meta charset="UTF-8" />
     <title>Markdown Viewer</title>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/github-markdown-css@5.2.0/github-markdown.min.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/normalize.css@8.0.1/normalize.css"
+    />
     <style>
+      html {
+        --text-primary: #0d0d0d;
+        --text-tertiary: #8f8f8f;
+      }
       body {
-        max-width: 800px;
-        margin: 40px auto;
-        font-family: Arial, sans-serif;
-        line-height: 1.6;
+      }
+
+      #app {
+        height: 100vh;
+        width: 100vw;
+        display: flex;
+        gap: 12px;
+        flex-direction: row;
+      }
+
+      #menu {
+        overflow-y: auto;
+      }
+
+      .menu-text {
+        margin-bottom: 4px;
+      }
+
+      #menu div {
+        cursor: pointer;
+      }
+
+      #content {
+        padding: 24px;
+        flex: 1;
+        overflow-y: auto;
+      }
+
+      .dir {
+        color: var(--text-tertiary);
+        font-weight: 400;
+        padding: 4px 12px;
+        background-color: rgba(139, 139, 139, 0.1);
+        margin-bottom: 8px;
+      }
+      .note {
+        color: var(--text-primary);
+        font-weight: 400;
+        padding-left: 12px;
       }
     </style>
   </head>
   <body>
-    <h1 id="title">Loading...</h1>
-    <div id="content">Please wait...</div>
-    <a href="/static/note/css/css.md">css</a>
-
+    <div id="app">
+      <div id="menu"></div>
+      <div id="content" class="markdown-body"></div>
+    </div>
     <script>
-      const params = new URLSearchParams(window.location.search);
-      const path = params.get("path");
+      const buildMenu = (data, parentNode) => {
+        const el = document.createElement("div");
+        const text = document.createElement("div");
+        text.classList.add("menu-text");
 
-      const s = fetch("/files");
+        text.innerHTML = data.name;
+        el.appendChild(text);
+        if (data.isDir) {
+          el.classList.add("dir");
 
-      if (path) {
-        document.getElementById("title").textContent = path;
+          const sorted = [...data?.children]
+            .filter((v) => v.name.endsWith(".md") || v.isDir)
+            .sort((a, b) => {
+              if (!a.isDir && b.isDir) {
+                return -1;
+              } else {
+                return 0;
+              }
+            });
 
-        fetch(`/note/${path}`)
-          .then((res) => {
-            if (!res.ok) throw new Error("File not found");
-            return res.text();
-          })
-          .then((markdown) => {
-            document.getElementById("content").innerHTML =
-              marked.parse(markdown);
-          })
-          .catch((err) => {
-            document.getElementById("content").textContent = err.message;
+          sorted?.forEach((element) => {
+            buildMenu(element, el);
           });
-      } else {
-        document.getElementById("content").textContent = "No path specified.";
-      }
+
+          console.log("sorted===>", sorted);
+        } else {
+          console.log("data===>", data);
+          el.addEventListener("click", async () => {
+            const res = await fetch("/" + data.path);
+            const fileData = await res.text();
+
+            console.log("fileData==>", fileData);
+
+            document.getElementById("content").innerHTML =
+              marked.parse(fileData);
+          });
+
+          el.classList.add("note");
+        }
+        parentNode.appendChild(el);
+      };
+
+      const init = async () => {
+        const res = await fetch("/files");
+        const fileData = await res.json();
+
+        console.log(fileData.files);
+
+        const menuContainer = document.getElementById("menu");
+
+        buildMenu(fileData.files, menuContainer);
+      };
+
+      init();
     </script>
   </body>
 </html>
