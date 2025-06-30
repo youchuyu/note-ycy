@@ -3,7 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <title>Markdown Viewer</title>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"
+      async
+    ></script>
+    <script src="./script.js" defer></script>
     <link
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/github-markdown-css@5.2.0/github-markdown.min.css"
@@ -12,6 +16,7 @@
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/normalize.css@8.0.1/normalize.css"
     />
+
     <style>
       html {
         --text-primary: #0d0d0d;
@@ -58,6 +63,9 @@
         font-weight: 400;
         padding-left: 12px;
       }
+      .note[data-state="active"] {
+        color: deepskyblue;
+      }
     </style>
   </head>
   <body>
@@ -65,61 +73,5 @@
       <div id="menu"></div>
       <div id="content" class="markdown-body"></div>
     </div>
-    <script>
-      const buildMenu = (data, parentNode) => {
-        const el = document.createElement("div");
-        const text = document.createElement("div");
-        text.classList.add("menu-text");
-
-        text.innerHTML = data.name;
-        el.appendChild(text);
-        if (data.isDir) {
-          el.classList.add("dir");
-
-          const sorted = [...data?.children]
-            .filter((v) => v.name.endsWith(".md") || v.isDir)
-            .sort((a, b) => {
-              if (!a.isDir && b.isDir) {
-                return -1;
-              } else {
-                return 0;
-              }
-            });
-
-          sorted?.forEach((element) => {
-            buildMenu(element, el);
-          });
-
-          console.log("sorted===>", sorted);
-        } else {
-          console.log("data===>", data);
-          el.addEventListener("click", async () => {
-            const res = await fetch("/" + data.path);
-            const fileData = await res.text();
-
-            console.log("fileData==>", fileData);
-
-            document.getElementById("content").innerHTML =
-              marked.parse(fileData);
-          });
-
-          el.classList.add("note");
-        }
-        parentNode.appendChild(el);
-      };
-
-      const init = async () => {
-        const res = await fetch("/files");
-        const fileData = await res.json();
-
-        console.log(fileData.files);
-
-        const menuContainer = document.getElementById("menu");
-
-        buildMenu(fileData.files, menuContainer);
-      };
-
-      init();
-    </script>
   </body>
 </html>
