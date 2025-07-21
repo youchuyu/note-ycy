@@ -240,3 +240,10 @@ docker run -d -p 80:8080 --name my-prod-app my-go-app:prod
 # 查看日志
 docker logs -f my-prod-app
 ```
+
+## 实践
+
+1. `docker build -t note-ycy:v1.5 .`
+2. `docker run --rm -it -p 8088:3003 note-ycy:v1.5`
+3. `docker ps`
+4. `docker exec -it 1b0e6b3806c7 /bin/sh`
