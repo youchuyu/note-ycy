@@ -10,8 +10,6 @@ import (
 func SetupRouter() *gin.Engine {
 	r := gin.Default()
 
-	// r.LoadHTMLGlob("templates/*")
-
 	r.Static("/public", "./public")
 
 	r.GET("/files", func(c *gin.Context) {
@@ -21,6 +19,15 @@ func SetupRouter() *gin.Engine {
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"files": files})
+	})
+
+	r.LoadHTMLFiles("./public/index.html")
+
+	r.NoRoute(func(c *gin.Context) {
+		c.HTML(200, "index.html", nil)
+	})
+	r.GET("/", func(c *gin.Context) {
+		c.File("./public/index.html")
 	})
 
 	return r
