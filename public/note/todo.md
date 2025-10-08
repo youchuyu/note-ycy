@@ -87,6 +87,56 @@
 
 # Performance API
 
+## 性能监测
+
+##
+
 # web worker
 
 # 项目更新后，如何提示用户刷新页面
+
+# Canvas
+
+## 事件交互
+
+## GPU 加速（webGL 结合）
+
+# 弱网检测
+
+## 监测网络连接状态
+
+navigator.onLine
+
+## 测量网络延迟和带宽
+
+# 数组 Array
+
+函数哪些可以改变自身，哪些不会
+
+# flex
+
+# URLSearchParams
+
+# 前端如何处理一个页面多主题色可供选择的场景
+
+# DOMContentLoaded 事件和 load 事件有什么区别
+
+# 如何实现页面文本不可选中，不可复制
+
+# 如何进行代码质量检测
+
+# http
+
+## http 缓存
+
+## http 向 https 做重定向应该使用哪个状态码
+
+## http header content-type 为 application/octet-stream
+
+# navigator.clipboard
+
+# 测试手段
+
+# 单元测试
+
+# E2E 测试
