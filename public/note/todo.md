@@ -3982,4 +3982,71 @@ test("renders button with label", () => {
 
 你希望我画吗？
 
-# E2E 测试
+# axios 常用配置
+
+# 动画性能如何检测
+
+# lodash.flattenDeep
+
+# input
+
+# 静态资源预加载
+
+# websocket
+
+# eslint
+
+# vite 预构建
+
+# 高阶组件 HOC
+
+# 判断设备
+
+## navigator.userAgent
+
+## window.innerWidth
+
+## 媒体查询 window.matchMedia()
+
+# 退出浏览器之间，发送积压的埋点数据请求
+
+## navigator.sendBeacon()
+
+## fetch() API 的 keepalive
+
+# -webkit-xxx
+
+# ResizeObserver
+
+# git bisect
+
+# Dom 快照录制
+
+Dom 快照录制-rrweb 库是目前最为流行的解决方案，一些商业化平台解决方案也都主要基于 rrweb 库来进行录制与回放的功能开发。
+
+# window.getSelection () ;
+
+# px 如何转为 rem
+
+- postcss-pxtorem
+- 编写脚本进行转换
+
+# 浏览器有同源策略，但是为何 cdn 请求资源的时候不会有 跨域限制
+
+# cookie 可以实现不同域共享吗
+
+# 判断一个对象是否为空，包含了其原型链上是否有自定义 数据或者方法
+
+# js 如何判空? 「空」包含了:空数组、空对象、空字符 串、0、undefined、null、空 map、空 set ，都属于为空的数据
+
+# 微前端
+
+## JavaScript Sandboxing
+
+## Webpack 的模块联邦
+
+# 设计一套前端全站请求耗时统计工具
+
+# cookie
+
+# 函数式编程
