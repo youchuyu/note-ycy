@@ -3984,11 +3984,645 @@ test("renders button with label", () => {
 
 # axios 常用配置
 
+非常好 👍
+`axios` 是前端最常用的 HTTP 请求库之一，理解常用配置对封装请求模块、处理统一错误、携带 Token 等非常关键。
+
+下面我系统讲一下 **axios 常用配置项 + 实际使用示例 + 最佳实践** 👇
+
+---
+
+## ✅ 一、基础配置项（`axios.create`）
+
+在项目中，我们通常不会直接用 `axios.get()` 或 `axios.post()`，
+而是通过 `axios.create()` 创建一个实例：
+
+```ts
+import axios from "axios";
+
+const request = axios.create({
+  baseURL: "/api", // 基础请求路径
+  timeout: 10000, // 超时时间（毫秒）
+  headers: {
+    // 默认请求头
+    "Content-Type": "application/json",
+  },
+  withCredentials: false, // 是否跨域携带 cookie
+});
+```
+
+### 常用配置项说明
+
+| 配置项            | 说明                      | 示例值                                     |
+| ----------------- | ------------------------- | ------------------------------------------ |
+| `baseURL`         | 请求基础路径              | `'https://api.example.com'`                |
+| `timeout`         | 请求超时时间（毫秒）      | `10000`                                    |
+| `headers`         | 默认请求头                | `{ 'Authorization': 'Bearer xxx' }`        |
+| `withCredentials` | 是否携带 cookie（跨域时） | `true / false`                             |
+| `params`          | `GET` 请求的查询参数      | `{ id: 123 }`                              |
+| `data`            | `POST` 请求的请求体       | `{ name: 'Tom' }`                          |
+| `responseType`    | 响应类型                  | `'json' / 'blob' / 'arraybuffer' / 'text'` |
+| `validateStatus`  | 自定义状态码校验          | `(status) => status < 400`                 |
+
+---
+
+## ✅ 二、请求与响应拦截器（核心用法）
+
+拦截器是 axios 的灵魂，可以在请求前统一处理 token、在响应后统一处理错误。
+
+```ts
+request.interceptors.request.use(
+  (config) => {
+    // 在请求前统一添加 token
+    const token = localStorage.getItem("token");
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+request.interceptors.response.use(
+  (response) => {
+    // 根据后端约定格式统一处理
+    if (response.data.code !== 0) {
+      console.error("接口错误:", response.data.message);
+      return Promise.reject(response.data);
+    }
+    return response.data;
+  },
+  (error) => {
+    // 统一错误处理
+    if (error.response) {
+      console.error("HTTP错误:", error.response.status);
+    } else if (error.code === "ECONNABORTED") {
+      console.error("请求超时");
+    } else {
+      console.error("网络错误:", error.message);
+    }
+    return Promise.reject(error);
+  }
+);
+```
+
+✅ 这样就可以在调用时直接得到业务数据：
+
+```ts
+const res = await request.get("/user");
+// 不需要再手动取 res.data
+```
+
+---
+
+## ✅ 三、不同请求方式的调用写法
+
+```ts
+// GET 请求
+request.get("/users", { params: { page: 1, size: 10 } });
+
+// POST 请求
+request.post("/login", { username: "admin", password: "123" });
+
+// PUT 请求
+request.put("/user/1", { name: "Tom" });
+
+// DELETE 请求
+request.delete("/user/1");
+
+// 并发请求
+const [user, posts] = await Promise.all([
+  request.get("/user/1"),
+  request.get("/user/1/posts"),
+]);
+```
+
+---
+
+## ✅ 四、取消请求（防抖/竞态处理）
+
+```ts
+const controller = new AbortController();
+
+request.get("/search", {
+  params: { q: "hello" },
+  signal: controller.signal,
+});
+
+// 中途取消
+controller.abort();
+```
+
+✅ 用于场景：
+
+- 输入搜索框时取消上一个请求；
+- 路由切换时取消未完成请求。
+
+---
+
+## ✅ 五、上传与下载文件配置
+
+### 🔹 上传文件
+
+```ts
+const formData = new FormData();
+formData.append("file", file);
+
+request.post("/upload", formData, {
+  headers: { "Content-Type": "multipart/form-data" },
+  onUploadProgress: (e) => {
+    const percent = Math.round((e.loaded / e.total) * 100);
+    console.log("上传进度:", percent);
+  },
+});
+```
+
+### 🔹 下载文件
+
+```ts
+const res = await request.get("/file/download", { responseType: "blob" });
+const url = window.URL.createObjectURL(res);
+const a = document.createElement("a");
+a.href = url;
+a.download = "file.pdf";
+a.click();
+```
+
+---
+
+## ✅ 六、axios 默认配置修改（全局配置）
+
+```ts
+axios.defaults.baseURL = "/api";
+axios.defaults.timeout = 10000;
+axios.defaults.headers.common["Authorization"] = "Bearer token";
+```
+
+（但推荐使用实例化的 `axios.create()`，更灵活）
+
+---
+
+## ✅ 七、常用组合封装（建议项目中这样写）
+
+👉 新建文件：`src/utils/request.ts`
+
+```ts
+import axios from "axios";
+
+const request = axios.create({
+  baseURL: "/api",
+  timeout: 10000,
+});
+
+request.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem("token");
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+request.interceptors.response.use(
+  (response) => {
+    const { code, data, message } = response.data;
+    if (code !== 0) {
+      return Promise.reject(new Error(message));
+    }
+    return data;
+  },
+  (error) => Promise.reject(error)
+);
+
+export default request;
+```
+
+调用：
+
+```ts
+import request from "@/utils/request";
+
+const user = await request.get("/user");
+```
+
+---
+
+## ✅ 八、补充：常用高级配置
+
+| 功能             | 配置项                         | 示例              |
+| ---------------- | ------------------------------ | ----------------- |
+| 请求取消         | `signal: AbortSignal`          | 防止重复请求      |
+| 请求重试         | 自行封装或用插件 `axios-retry` | 重试机制          |
+| 响应缓存         | 可用 `axios-cache-adapter`     | 加速重复请求      |
+| 自定义参数序列化 | `paramsSerializer`             | 处理数组参数      |
+| 自定义状态处理   | `validateStatus`               | 只处理 2xx 状态码 |
+
+---
+
+## 🧩 示例：带重试 + 错误提示的统一封装
+
+```ts
+import axios from "axios";
+import { message } from "antd";
+
+const request = axios.create({ baseURL: "/api", timeout: 8000 });
+
+request.interceptors.response.use(
+  (res) => res.data,
+  async (error) => {
+    if (!error.config.__retryCount) error.config.__retryCount = 0;
+
+    if (error.config.__retryCount < 2) {
+      error.config.__retryCount += 1;
+      return request(error.config); // 自动重试
+    }
+
+    message.error(error.response?.data?.message || "请求失败");
+    return Promise.reject(error);
+  }
+);
+
+export default request;
+```
+
+---
+
+是否希望我帮你整理一个「企业级 axios 封装模板」？
+包括：
+
+- 统一错误提示；
+- 请求节流/取消；
+- 自动携带 token；
+- 支持文件上传进度。
+
 # 动画性能如何检测
 
 # lodash.flattenDeep
 
+非常好的问题 👏
+**动画性能检测** 是前端性能优化中非常关键的一环，尤其是在你用 React Native、React Web、Canvas、SVG 或 CSS 动画时。
+不管是页面掉帧（jank）、卡顿，还是 GPU 占用过高，都需要量化分析。
+
+下面我给你系统介绍：
+👉 **动画性能检测的常用指标、浏览器工具、框架辅助工具和优化方法**。
+
+---
+
+## 🧭 一、动画性能的关键指标
+
+| 指标                                               | 含义                         | 理想值       |
+| -------------------------------------------------- | ---------------------------- | ------------ |
+| **FPS (Frames Per Second)**                        | 每秒渲染帧数                 | ≥ 60 FPS     |
+| **Frame Time**                                     | 每帧耗时（16.6ms = 1000/60） | ≤ 16ms       |
+| **CPU/GPU 占用**                                   | 渲染计算与绘制开销           | 越低越好     |
+| **Recalculate Style / Layout / Paint / Composite** | 浏览器渲染管线的各阶段耗时   | 尽量减少     |
+| **JS 线程阻塞时间**                                | 动画期间 JS 主线程占用       | 尽量低       |
+| **Memory 使用**                                    | 动画中内存分配/释放频率      | 稳定、无泄漏 |
+
+---
+
+## 🧩 二、在浏览器中检测动画性能
+
+### ✅ 1. **Chrome DevTools - Performance 面板（最强推荐）**
+
+这是分析 CSS / JS / Canvas / WebGL 动画性能的标准工具。
+
+**使用方法：**
+
+1. 打开 DevTools → “Performance”；
+2. 点击 “Record” 按钮；
+3. 执行动画（滚动、播放动画等）；
+4. 停止录制。
+
+**看点：**
+
+- 🟩 **FPS 图**：绿色条越密集越流畅；
+- 🟦 **Main thread**：显示 JS 执行、样式计算、绘制时间；
+- 🟪 **Paint / Composite Layers**：标出重绘和重组位置；
+- 🟧 **GPU / Rasterize**：可视化 GPU 绘制；
+- 🔍 可点击任意帧查看耗时详情。
+
+**重点关注：**
+
+- 是否频繁触发 **Recalculate Style**；
+- 是否频繁 **Layout / Paint**；
+- 是否存在长耗时 JS 阻塞（超过 50ms 的黄色块）；
+- 是否掉帧（FPS 低于 60）。
+
+---
+
+### ✅ 2. **Chrome DevTools - Rendering 面板**
+
+打开路径：
+**DevTools → Command Menu → “Show Rendering”**
+
+开启以下选项可直观看出动画问题：
+
+| 功能                      | 作用                                       |
+| ------------------------- | ------------------------------------------ |
+| ✅ “Paint flashing”       | 高亮重绘区域（可直观看出哪些元素频繁重绘） |
+| ✅ “FPS meter”            | 右上角显示实时帧率                         |
+| ✅ “Layout Shift Regions” | 检测布局跳动（layout shift）               |
+| ✅ “Layer Borders”        | 显示合成层边界（帮助识别 GPU 加速情况）    |
+
+👉 如果动画掉帧明显，可以看到 Paint 频繁闪烁、FPS 低于 60。
+
+---
+
+### ✅ 3. **Chrome DevTools - Layers 面板**
+
+用于分析哪些元素被提升为 GPU 合成层（Composited Layer）。
+
+- 动画时应确保变换属性（如 `transform`, `opacity`）能在单独层中渲染；
+- 避免在主线程上反复触发 reflow。
+
+---
+
+## 🧠 三、JS 动画性能检测（代码层）
+
+### 1️⃣ 使用 `Performance API`
+
+可以直接测量动画函数或渲染逻辑的耗时。
+
+```js
+performance.mark("start");
+doAnimationStep();
+performance.mark("end");
+performance.measure("frame", "start", "end");
+
+const measure = performance.getEntriesByName("frame")[0];
+console.log("Frame time:", measure.duration);
+```
+
+或统计平均 FPS：
+
+```js
+let last = performance.now();
+let frames = 0;
+
+function loop() {
+  frames++;
+  const now = performance.now();
+  if (now - last >= 1000) {
+    console.log("FPS:", frames);
+    frames = 0;
+    last = now;
+  }
+  requestAnimationFrame(loop);
+}
+loop();
+```
+
+---
+
+### 2️⃣ 使用 `requestAnimationFrame` 统计掉帧率
+
+```js
+let last = performance.now();
+let count = 0;
+
+function checkFPS() {
+  const now = performance.now();
+  count++;
+  if (now - last >= 1000) {
+    console.log(`FPS: ${count}`);
+    count = 0;
+    last = now;
+  }
+  requestAnimationFrame(checkFPS);
+}
+checkFPS();
+```
+
+如果 FPS 长期 < 55，就说明动画卡顿。
+
+---
+
+## 📱 四、在 React Native 中检测动画性能
+
+React Native 提供了内建性能工具：
+
+### ✅ 1. 开启 FPS 指标显示
+
+在模拟器或真机中打开：
+
+```bash
+Cmd + D → Show Perf Monitor
+```
+
+会显示：
+
+- JS FPS（JavaScript 主线程帧率）
+- UI FPS（UI 渲染线程帧率）
+
+👉 如果 UI FPS < 60 或 JS FPS < 55，就存在掉帧或计算瓶颈。
+
+### ✅ 2. 使用 `react-native-performance` 或 `why-did-you-render`
+
+这些库可以帮你检测：
+
+- 哪些组件频繁重新渲染；
+- 渲染耗时；
+- Reanimated 动画的性能。
+
+---
+
+## 💻 五、框架层性能分析（React / Vue）
+
+### React 开发者工具 → Profiler
+
+可以分析动画过程中：
+
+- 哪些组件重复渲染；
+- 每次渲染耗时；
+- 哪些 state 更新触发渲染。
+
+动画如果是基于 state 更新（而非 transform），就可能造成性能问题。
+例如：
+
+```tsx
+const [x, setX] = useState(0);
+useEffect(() => {
+  const id = setInterval(() => setX((v) => v + 1), 16);
+  return () => clearInterval(id);
+}, []);
+```
+
+⚠️ 这会导致每帧 React 重新渲染 → 性能灾难。
+
+应改为：
+
+```tsx
+<div style={{ transform: `translateX(${x}px)` }} />
+```
+
+或使用 CSS Transition / Reanimated / Framer Motion。
+
+---
+
+## 🧩 六、第三方性能分析工具
+
+| 工具                   | 说明                                         |
+| ---------------------- | -------------------------------------------- |
+| **Stats.js**           | 实时显示 FPS/内存占用                        |
+| **GSAP LagSmoothing**  | GSAP 内置的帧率平滑工具                      |
+| **Perfume.js**         | 性能指标采集工具（包括 FPS、First Paint 等） |
+| **React Profiler API** | 记录渲染时间和原因                           |
+| **Web Vitals**         | 更高层级性能监控（LCP/FID/CLS）              |
+
+---
+
+## 🚀 七、动画性能优化方向（总结）
+
+| 问题         | 原因                          | 优化手段                                      |
+| ------------ | ----------------------------- | --------------------------------------------- |
+| 动画掉帧     | 主线程阻塞                    | 使用 `transform` / `opacity`，开启 GPU 合成层 |
+| 重绘频繁     | 修改 `top/left`、颜色、阴影等 | 尽量使用 `transform` 替代 layout              |
+| 帧率波动     | JS 计算过多                   | 使用 `requestAnimationFrame` 节流             |
+| 渲染卡顿     | DOM 数量大                    | 使用虚拟滚动、减少 DOM 层级                   |
+| React 重渲染 | 状态更新过于频繁              | 使用 `memo` / `useMemo` / 动画库              |
+| GPU 压力大   | 同时绘制层太多                | 合理合层、减少透明层叠                        |
+
+---
+
+## 🎯 推荐检测组合
+
+| 平台         | 检测工具                           | 目标       |
+| ------------ | ---------------------------------- | ---------- |
+| Web          | Chrome Performance + Rendering     | 帧率、重绘 |
+| React        | React Profiler + Performance Panel | 渲染性能   |
+| React Native | Perf Monitor / Flipper             | JS/UI FPS  |
+| Canvas       | Stats.js + Performance API         | 绘制性能   |
+| 生产环境     | Web Vitals / Perfume.js            | 实时监控   |
+
+---
+
+是否希望我帮你整理一个「动画性能检测 + 优化 checklist」？
+包含 **检测 → 分析 → 优化** 的完整流程（适合放在前端性能文档里）。
+
 # input
+
+非常好的问题 👍
+`<input>` 是前端表单中最基础、也是最常用的元素之一。
+它的“使用场景”非常广泛，几乎所有需要**用户输入、交互、过滤或编辑数据**的地方都离不开它。
+下面我来系统地帮你分类讲一下 👇
+
+---
+
+## 🧩 一、基本输入场景（text 系列）
+
+最常见的就是普通文本输入。
+
+| 类型       | 示例                        | 使用场景                             |
+| ---------- | --------------------------- | ------------------------------------ |
+| `text`     | `<input type="text" />`     | 用户名、搜索框、备注输入等通用文本   |
+| `password` | `<input type="password" />` | 登录注册密码输入                     |
+| `email`    | `<input type="email" />`    | 邮箱输入（带格式校验）               |
+| `tel`      | `<input type="tel" />`      | 手机号输入（移动端自动调出数字键盘） |
+| `url`      | `<input type="url" />`      | 网站地址输入（可自动校验格式）       |
+| `search`   | `<input type="search" />`   | 搜索框（部分浏览器自动带清除按钮）   |
+
+> ✅ **注意：** > `email`、`url`、`tel` 在移动端尤其有用，会自动唤起对应的键盘样式。
+
+---
+
+## 🔢 二、数值与选择场景
+
+| 类型                                 | 示例                                        | 使用场景                                 |
+| ------------------------------------ | ------------------------------------------- | ---------------------------------------- |
+| `number`                             | `<input type="number" min="0" max="100" />` | 数量、价格、分数输入等需要数值范围的场景 |
+| `range`                              | `<input type="range" min="0" max="100" />`  | 滑动条调节音量、亮度、进度等             |
+| `checkbox`                           | `<input type="checkbox" />`                 | 多选项（兴趣标签、设置选项）             |
+| `radio`                              | `<input type="radio" name="gender" />`      | 单选项（性别、类型选择）                 |
+| `color`                              | `<input type="color" />`                    | 颜色选择器                               |
+| `select`（虽不是 input，但常一起用） | `<select><option>选项</option></select>`    | 下拉选择                                 |
+
+---
+
+## 📅 三、时间类输入
+
+| 类型             | 示例                              | 使用场景                   |
+| ---------------- | --------------------------------- | -------------------------- |
+| `date`           | `<input type="date" />`           | 选择日期（生日、出发日期） |
+| `time`           | `<input type="time" />`           | 选择时间（闹钟、会议时间） |
+| `datetime-local` | `<input type="datetime-local" />` | 日期 + 时间输入            |
+| `month`          | `<input type="month" />`          | 选择月份（账单周期）       |
+| `week`           | `<input type="week" />`           | 选择周数（周报选择）       |
+
+> ✅ 现代浏览器原生支持这些控件，会自动渲染日历或时间选择界面。
+
+---
+
+## 🖼️ 四、文件与媒体输入
+
+| 类型            | 示例                                     | 使用场景                      |
+| --------------- | ---------------------------------------- | ----------------------------- |
+| `file`          | `<input type="file" />`                  | 上传文件（图片、PDF、视频等） |
+| `file multiple` | `<input type="file" multiple />`         | 支持多文件上传                |
+| `accept` 属性   | `<input type="file" accept="image/*" />` | 限制上传文件类型              |
+
+---
+
+## 📱 五、系统与交互类输入
+
+| 类型     | 示例                                      | 使用场景                     |
+| -------- | ----------------------------------------- | ---------------------------- |
+| `hidden` | `<input type="hidden" value="user_id" />` | 隐藏数据传递（提交表单附带） |
+| `submit` | `<input type="submit" />`                 | 表单提交按钮                 |
+| `reset`  | `<input type="reset" />`                  | 表单重置                     |
+| `button` | `<input type="button" value="点击" />`    | 自定义按钮（不提交）         |
+| `image`  | `<input type="image" src="submit.png" />` | 图片形式的提交按钮           |
+
+---
+
+## 🧠 六、配合 JS 的常见使用场景
+
+| 场景                     | 示例 / 说明                                                              |
+| ------------------------ | ------------------------------------------------------------------------ |
+| ✅ **搜索输入**          | 实时监听输入变化：`onChange` + 防抖（如搜索建议）                        |
+| 🧩 **动态表单**          | 多个 `<input>` 组成数据结构（如动态添加输入项）                          |
+| 🧾 **验证输入**          | `pattern` + `required` + JS 校验（手机号、邮箱格式）                     |
+| 🔍 **过滤器 / 筛选条件** | 如商品列表筛选区                                                         |
+| 📷 **图片上传**          | `<input type="file" accept="image/*" capture="camera" />` 可直接拍照上传 |
+| 🖊️ **可编辑区域**        | 结合 CSS 伪元素或内联编辑实现“点击修改”功能                              |
+| ⌨️ **输入法兼容**        | 监听 `compositionstart` / `compositionend` 防止中文输入冲突              |
+
+---
+
+## 🧰 七、开发建议
+
+- ✅ 用 `value + onChange` 控制（受控组件）；
+- ✅ 使用 `placeholder` 提示用户；
+- ✅ 对需要输入的场景添加 `aria-label` 以提高无障碍性；
+- 🚫 不推荐滥用 `contenteditable` 替代 `<input>`；
+- ⚡ 对性能敏感的实时输入，用防抖（`lodash.debounce`）优化。
+
+---
+
+## 🧾 实战例子：搜索输入框
+
+```tsx
+import { useState } from "react";
+
+export default function SearchInput() {
+  const [value, setValue] = useState("");
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setValue(e.target.value);
+  };
+
+  return (
+    <input
+      type="search"
+      placeholder="搜索内容..."
+      value={value}
+      onChange={handleChange}
+      style={{ padding: 8, borderRadius: 4, border: "1px solid #ccc" }}
+    />
+  );
+}
+```
+
+---
+
+是否希望我帮你列出 **Ant Design 中 `<Input>` 组件** 的常用类型与使用场景对照表？（如 `Input.Password`、`Input.Search`、`Input.TextArea` 等）
 
 # 静态资源预加载
 
