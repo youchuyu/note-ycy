@@ -752,3 +752,454 @@ console.log(isEqual); // true
 ```
 
 这样更符合实际场景中的“相等”判断。
+
+# URLSearchParams
+
+好的，我们来系统介绍一下 **`URLSearchParams`**，这是现代浏览器提供的原生 API，用于 **解析和操作 URL 查询参数（query string）**，非常方便。
+
+---
+
+## 🧩 一、什么是 URLSearchParams
+
+- 它是一个类，用来处理 URL 中 `?key1=value1&key2=value2` 的查询参数
+- 可以 **读取、增加、修改、删除、迭代** 参数
+
+```js
+const params = new URLSearchParams("?name=Alice&age=20");
+```
+
+---
+
+## 🏗️ 二、常用方法
+
+### 1️⃣ `get(name)`
+
+- 获取参数值，返回字符串（第一个匹配的值）
+
+```js
+const params = new URLSearchParams("?name=Alice&age=20");
+console.log(params.get("name")); // 'Alice'
+console.log(params.get("age")); // '20'
+console.log(params.get("gender")); // null
+```
+
+---
+
+### 2️⃣ `getAll(name)`
+
+- 获取所有同名参数值，返回数组
+
+```js
+const params = new URLSearchParams("?tag=js&tag=react");
+console.log(params.getAll("tag")); // ['js', 'react']
+```
+
+---
+
+### 3️⃣ `has(name)`
+
+- 判断参数是否存在
+
+```js
+const params = new URLSearchParams("?name=Alice");
+console.log(params.has("name")); // true
+console.log(params.has("age")); // false
+```
+
+---
+
+### 4️⃣ `set(name, value)`
+
+- 设置参数值，如果存在则覆盖，否则添加
+
+```js
+const params = new URLSearchParams("?name=Alice");
+params.set("name", "Bob"); // 覆盖
+params.set("age", "20"); // 添加
+console.log(params.toString()); // 'name=Bob&age=20'
+```
+
+---
+
+### 5️⃣ `append(name, value)`
+
+- 添加一个新的参数（不会覆盖已有同名参数）
+
+```js
+const params = new URLSearchParams("?tag=js");
+params.append("tag", "react");
+console.log(params.toString()); // 'tag=js&tag=react'
+```
+
+---
+
+### 6️⃣ `delete(name)`
+
+- 删除参数
+
+```js
+const params = new URLSearchParams("?name=Alice&age=20");
+params.delete("age");
+console.log(params.toString()); // 'name=Alice'
+```
+
+---
+
+### 7️⃣ `toString()`
+
+- 转为查询字符串
+
+```js
+const params = new URLSearchParams();
+params.append("foo", "bar");
+params.append("baz", "qux");
+console.log(params.toString()); // 'foo=bar&baz=qux'
+```
+
+---
+
+### 8️⃣ 遍历参数
+
+#### `forEach` 遍历
+
+```js
+const params = new URLSearchParams("?name=Alice&age=20");
+params.forEach((value, key) => {
+  console.log(key, value);
+});
+// 输出:
+// name Alice
+// age 20
+```
+
+#### `entries()` / `keys()` / `values()`
+
+```js
+for (const [key, value] of params.entries()) console.log(key, value);
+for (const key of params.keys()) console.log(key);
+for (const value of params.values()) console.log(value);
+```
+
+---
+
+### 9️⃣ 从 URL 对象获取查询参数
+
+```js
+const url = new URL("https://example.com/?name=Alice&age=20");
+const params = url.searchParams;
+console.log(params.get("name")); // 'Alice'
+```
+
+---
+
+## ⚡ 十、实用技巧
+
+1. **构建带参数的 URL**
+
+```js
+const params = new URLSearchParams({ name: "Alice", age: 20 });
+const url = `https://example.com?${params.toString()}`;
+console.log(url); // 'https://example.com?name=Alice&age=20'
+```
+
+2. **处理数组参数**
+
+```js
+const params = new URLSearchParams();
+["js", "react"].forEach((tag) => params.append("tag", tag));
+console.log(params.toString()); // 'tag=js&tag=react'
+```
+
+3. **更新 URL 而不刷新页面（SPA）**
+
+```js
+const params = new URLSearchParams(window.location.search);
+params.set("page", "2");
+history.replaceState(null, "", "?" + params.toString());
+```
+
+---
+
+✅ 总结：
+
+- `get` / `getAll` → 读取
+- `set` / `append` → 修改/增加
+- `delete` → 删除
+- `has` → 判断
+- `toString` → 转字符串
+- `forEach` / `entries` / `keys` / `values` → 遍历
+
+---
+
+我可以帮你写一个 **React Hook 封装的 URLSearchParams 工具**，
+支持 **读写参数 + 自动更新 URL + 响应参数变化**，非常方便 SPA 使用。
+
+你希望我帮你写吗？
+
+# `<script>` 标签详解（中文速查）
+
+你问的是 `script` 标签 —— 我把内容整理成一张实用速查表，涵盖用法、常用属性、加载行为、模块、动态插入、安全和最佳实践。👍
+
+---
+
+## 一、基本用法
+
+```html
+<!-- 内联脚本 -->
+<script>
+  console.log("hello");
+</script>
+
+<!-- 外部脚本 -->
+<script src="/static/app.js"></script>
+```
+
+内联脚本直接写在标签内；外部脚本通过 `src` 引入并下载执行。
+
+---
+
+## 二、重要属性与含义
+
+- **`src`**：外部脚本 URL（相对或绝对）。存在时标签内的内容会被忽略。
+- **`type`**：
+
+  - 默认 `text/javascript`（可省略）。
+  - `type="module"` 表示 ES module（支持 `import`/`export`，默认严格模式，module 脚本是异步且有自己的作用域）。
+
+- **`async`**（只对外部脚本有效）：
+
+  - 浏览器会并行下载脚本并尽快执行（下载完成就执行），不保证执行顺序。
+  - 适合独立、不依赖其他脚本的第三方脚本（如统计）。
+
+- **`defer`**（只对外部脚本有效）：
+
+  - 并行下载，**延迟到 HTML 解析完成后、DOMContentLoaded 前**按加入顺序执行。
+  - 适合需要保持执行顺序且不阻塞解析的脚本（常用于主体逻辑）。
+
+- **`nomodule`**：
+
+  - 与 `type="module"` 配合，用于向不支持 module 的旧浏览器提供回退脚本。
+
+- **`crossorigin`**：设置跨域请求策略（`anonymous` 或 `use-credentials`），通常配合 `integrity` 使用。
+- **`integrity`**：子资源完整性（SRI），用于校验外部脚本内容是否被篡改（指定哈希）。
+- **`nonce` / `csp`**：用于 CSP（内容安全策略）允许特定内联脚本执行的机制。
+- **`referrerpolicy`**：请求时的 referrer 策略。
+- **`defer` 与 `async` 可同时设置？**：在规范中若两者同时存在，`async` 优先（但一般不要同时用以避免混乱）。
+
+---
+
+## 三、加载与执行时序（核心要点）
+
+- **普通 `<script src>`（无 async/defer）**：HTML 解析暂停 → 下载（如果在缓存可能立即）→ 执行 → 恢复解析。会阻塞页面构建。
+- **`async`**：HTML 解析不阻塞下载；下载完成立即执行（会中断解析）；多个 async 脚本执行顺序不可预测。
+- **`defer`**：HTML 解析不阻塞下载；全部下载完成后按文档顺序执行；在 `DOMContentLoaded` 触发前完成执行。
+- **`type="module"`**：行为像 `defer`（异步），但模块之间的导入解析与执行遵循 ES module 语义；每个 module 有自己作用域，顶层 `this` 是 `undefined`。
+
+---
+
+## 四、ES Module (`type="module"`) 特性
+
+- 支持 `import` / `export`。
+- 模块默认是延迟执行（类似 defer）。
+- 模块在浏览器中按 CORS 原则请求（需要正确的响应头）。
+- 模块内顶层可使用 `await`（Top-level await）。
+- 模块相互之间是单例（同一模块只会被实例化一次）。
+
+示例：
+
+```html
+<script type="module">
+  import { foo } from "./lib.js";
+  foo();
+</script>
+```
+
+给不支持 module 的浏览器回退：
+
+```html
+<script type="module" src="main.mjs"></script>
+<script nomodule src="legacy.js"></script>
+```
+
+---
+
+## 五、动态插入脚本（运行时加载）
+
+```js
+const s = document.createElement("script");
+s.src = "/chunk.js";
+s.async = true; // 可选
+document.head.appendChild(s);
+```
+
+动态插入脚本默认 `async` 行为（立即下载并执行）。若需 `defer` 行为，可用模块或控制加载顺序/回调。
+
+---
+
+## 六、安全相关
+
+- **XSS 风险**：内联脚本最易被 XSS 利用。尽量将逻辑放外部文件并启用 CSP。
+- **CSP（Content Security Policy）**：通过响应头 `Content-Security-Policy` 控制允许加载的脚本源，使用 `nonce` 或 `hash` 来允许特定内联脚本。
+- **SRI (`integrity`)**：对第三方 CDN 脚本做哈希校验防篡改（需配合 `crossorigin`）。
+- **避免 eval / new Function**：这些会绕过 CSP（或使策略更松），尽量避免。
+
+示例（SRI）：
+
+```html
+<script
+  src="https://cdn/.../lib.js"
+  integrity="sha384-abcdef..."
+  crossorigin="anonymous"
+></script>
+```
+
+---
+
+## 七、性能与最佳实践（实用清单）
+
+- 将尽可能多的脚本设置为 **`defer`**，以避免阻塞解析且保持执行顺序。
+- 对第三方分析/广告脚本使用 **`async`**（它们通常不依赖主应用）。
+- 对于现代项目，优先考虑使用 **ES Modules**（`type="module"`）与 `nomodule` 回退策略。
+- 使用 **SRI** 和 **CSP** 提升安全性。
+- 把不影响首屏渲染的脚本放到页面底部或标记为 `defer`。
+- 动态加载大体积脚本（code-splitting / lazy load）以减少首屏体积。
+- 用 build 工具（Webpack/Rollup/Vite）生成 hashed 文件名并设置 `crossorigin` 与正确 header。
+
+---
+
+## 八、常见问题速答
+
+- Q：`defer` 支持内联脚本吗？
+  A：`defer` 只对外部脚本有意义，内联脚本会立即执行。
+
+- Q：是否要总用 `async` 以提高性能？
+  A：不是，`async` 会打乱执行顺序。若脚本相互依赖，使用 `defer`。
+
+- Q：如何让第三方脚本不阻塞渲染？
+  A：使用 `async` 或动态插入；或者把脚本放在页面底部并使用 `defer`。
+
+---
+
+如果你想，我可以：
+
+- 给出一个**最佳实践模版**（`<head>` 与 `<body>` 的脚本如何组织）；
+- 或者展示如何用 **CSP + nonce + SRI** 实现内联脚本安全策略；
+- 还可以写一个小例子演示 `async` / `defer` / `module` 的执行顺序。
+
+# DocumentFragment
+
+好的，我们来讲 **`DocumentFragment`**，这是 DOM API 中一个非常有用的概念，尤其在 **批量操作 DOM、优化性能** 时常用。
+
+---
+
+## 一、`DocumentFragment` 是什么
+
+`DocumentFragment` 是 **一个轻量级的、最小化的 DOM 容器**，它本身是 **文档片段**，可以包含节点，但 **不会成为页面的一部分**。
+
+特点：
+
+1. 它**不是普通的 DOM 元素**，它没有父节点。
+2. 它**不会被渲染到页面**。
+3. 插入 DOM 时，**它的子节点会被“整体移动”到目标 DOM**，而不是复制。
+
+> 简单理解：`DocumentFragment` 就像一个**临时的 DOM 容器**，你可以先往里面拼装节点，最后一次性加入页面，减少重绘。
+
+---
+
+## 二、创建 `DocumentFragment`
+
+```js
+const fragment = document.createDocumentFragment();
+```
+
+---
+
+## 三、典型用途
+
+### 1️⃣ 批量插入 DOM（性能优化）
+
+假设要往列表插入 1000 个 `<li>`：
+
+```js
+const ul = document.querySelector("ul");
+const fragment = document.createDocumentFragment();
+
+for (let i = 0; i < 1000; i++) {
+  const li = document.createElement("li");
+  li.textContent = "Item " + i;
+  fragment.appendChild(li); // 先加到 fragment
+}
+
+ul.appendChild(fragment); // 一次性插入，减少回流
+```
+
+✅ 优点：
+
+- 只会触发一次 DOM 插入；
+- 避免了循环中多次回流和重绘。
+
+---
+
+### 2️⃣ 移动节点而非复制
+
+```js
+const fragment = document.createDocumentFragment();
+const divs = document.querySelectorAll("div");
+
+divs.forEach((div) => fragment.appendChild(div));
+
+document.body.appendChild(fragment); // div 被移动到 body，而不是复制
+```
+
+> `DocumentFragment` 中的节点 **是引用移动**，不是复制。
+
+---
+
+### 3️⃣ 临时容器拼装复杂 DOM
+
+```js
+const fragment = document.createDocumentFragment();
+
+const h1 = document.createElement("h1");
+h1.textContent = "Title";
+fragment.appendChild(h1);
+
+const p = document.createElement("p");
+p.textContent = "Paragraph";
+fragment.appendChild(p);
+
+document.body.appendChild(fragment);
+```
+
+> 在真实页面中只触发一次渲染。
+
+---
+
+## 四、与普通元素的区别
+
+| 特性           | DocumentFragment         | 普通 DOM 元素        |
+| -------------- | ------------------------ | -------------------- |
+| 是否显示在页面 | ❌ 不显示                | ✅ 显示              |
+| 是否有父节点   | ❌ 没有                  | ✅ 有（可能为 null） |
+| 插入时效果     | 子节点会被移动到目标节点 | 元素整体插入         |
+| 常用场景       | 批量 DOM 操作            | 单个节点或结构性布局 |
+
+---
+
+## 五、注意点
+
+1. **只包含子节点**：DocumentFragment 本身不可见，只能操作其子节点。
+2. **移动而不是复制**：`appendChild` 会把节点从 fragment 移到 DOM。
+3. **适合动态拼装和性能优化**：特别是循环创建大量节点时。
+
+---
+
+✅ **总结一句话**：
+
+> `DocumentFragment` 是一个轻量、不可见的 DOM 容器，用于在内存中先拼装节点，再一次性插入页面，减少重绘和回流，提高性能。
+
+---
+
+如果你愿意，我可以画一张 **`DocumentFragment` 插入 DOM 的流程图**，直观展示它的“临时容器 → 移动子节点 → 页面渲染”过程。
+
+你希望我画吗？

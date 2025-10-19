@@ -249,3 +249,208 @@ JSI 是 React Native 新架构的核心组成部分，与其他模块协同工�
 [3]: https://maxiee.github.io/post/ReactNativeTheNewArchitecture2md/?utm_source=chatgpt.com "React Native 的新架构介绍（二）：JSI 和JSC | Maxiee Blog"
 [4]: https://juejin.cn/post/6999432558366703630?utm_source=chatgpt.com "React Native JSI：实现RN与原生通信 - 稀土掘金"
 [5]: https://blog.csdn.net/gitblog_00064/article/details/139571853?utm_source=chatgpt.com "探索React Native的JSI世界：react-native-jsi-template-CSDN博客"
+
+# webview
+
+非常好 👍 — 这是 React Native 中非常常见、又容易被误解的组件。
+我们来系统讲清楚 **React Native WebView** 的作用、原理、通信机制、性能特点和典型应用场景。
+
+---
+
+## 🧩 一、什么是 WebView
+
+**WebView** 是 React Native 用来在原生 App 内部嵌入一个“网页容器”的组件。
+简单理解：它就是一个「App 内置浏览器」，可以在 React Native 中渲染 HTML、运行 JS、加载网页资源。
+
+在 React Native 中使用：
+
+```tsx
+import { WebView } from "react-native-webview";
+
+<WebView source={{ uri: "https://example.com" }} />;
+```
+
+> 目前 WebView 已不再内置在 React Native 主包中，而是独立维护的社区包：
+> 📦 [`react-native-webview`](https://github.com/react-native-webview/react-native-webview)
+
+---
+
+## ⚙️ 二、底层实现原理
+
+React Native 的 WebView 是对各平台原生 WebView 的封装：
+
+| 平台              | 使用的原生控件                            |
+| ----------------- | ----------------------------------------- |
+| **iOS**           | `WKWebView`（现代版 Safari 引擎）         |
+| **Android**       | `android.webkit.WebView`（基于 Chromium） |
+| **Windows/macOS** | 对应平台的原生浏览器引擎控件              |
+
+React Native 层仅做了以下事情：
+
+- 将 props 转换为原生控件的配置；
+- 监听事件（如加载状态、错误、导航变化）；
+- 提供 **JS 与原生通信桥（Bridge）**；
+- 允许注入自定义 JS/CSS。
+
+---
+
+## 🌐 三、基本用法
+
+### 1️⃣ 加载网页
+
+```tsx
+<WebView source={{ uri: "https://reactnative.dev/" }} />
+```
+
+### 2️⃣ 加载本地 HTML
+
+```tsx
+const html = `<h1>Hello from HTML</h1>`;
+<WebView source={{ html }} />;
+```
+
+### 3️⃣ 加载本地文件
+
+```tsx
+<WebView source={require("./assets/local.html")} />
+```
+
+---
+
+## 🔁 四、通信机制（JS ↔ RN）
+
+WebView 最大的亮点是它允许 **双向通信**：
+
+### 1️⃣ JS → RN：通过 `window.ReactNativeWebView.postMessage`
+
+在网页中（HTML 内）：
+
+```html
+<script>
+  window.ReactNativeWebView.postMessage(
+    JSON.stringify({ action: "login", token: "abc" })
+  );
+</script>
+```
+
+React Native 侧接收：
+
+```tsx
+<WebView
+  onMessage={(event) => {
+    const data = JSON.parse(event.nativeEvent.data);
+    console.log("来自网页的数据：", data);
+  }}
+/>
+```
+
+### 2️⃣ RN → JS：通过 `injectJavaScript()` 或 `injectedJavaScript`
+
+```tsx
+const webviewRef = useRef(null);
+
+<WebView
+  ref={webviewRef}
+  source={{ uri: 'https://example.com' }}
+/>
+
+<Button
+  title="向网页发送消息"
+  onPress={() => {
+    webviewRef.current?.injectJavaScript(`
+      alert('Hello from React Native');
+      true;
+    `);
+  }}
+/>
+```
+
+💡 `injectedJavaScript` 是在网页加载完成时自动执行的脚本；
+`injectJavaScript()` 是在任意时刻动态注入。
+
+---
+
+## 🧭 五、常见事件
+
+| 事件名                         | 说明                                 |
+| ------------------------------ | ------------------------------------ |
+| `onLoadStart`                  | 网页开始加载                         |
+| `onLoadProgress`               | 加载进度（0~1）                      |
+| `onLoadEnd`                    | 加载结束（成功/失败）                |
+| `onError`                      | 加载失败                             |
+| `onNavigationStateChange`      | 地址或标题变化                       |
+| `onMessage`                    | 网页通过 postMessage 发送数据        |
+| `onShouldStartLoadWithRequest` | 拦截导航（返回 true/false 控制跳转） |
+
+示例：
+
+```tsx
+<WebView
+  onNavigationStateChange={(navState) => {
+    console.log("当前 URL:", navState.url);
+  }}
+  onShouldStartLoadWithRequest={(req) => {
+    if (req.url.startsWith("https://forbidden.com")) return false;
+    return true;
+  }}
+/>
+```
+
+---
+
+## ⚡ 六、性能与注意事项
+
+| 方面           | 建议                                                                             |
+| -------------- | -------------------------------------------------------------------------------- |
+| **加载性能**   | 预加载 HTML / 缓存静态资源 / 使用 gzip 压缩                                      |
+| **内存**       | 避免频繁创建销毁 WebView；可在 Tab 中复用实例                                    |
+| **安全性**     | 仅允许受信任的 URL；避免执行未知 JS                                              |
+| **交互体验**   | 用原生组件（例如下拉刷新、加载进度条）增强体验                                   |
+| **调试**       | iOS：Safari → 开发 → WebView 调试；Android：Chrome DevTools → `chrome://inspect` |
+| **桥性能限制** | JS <-> RN 通信频繁会造成性能瓶颈（建议节流或批量通信）                           |
+
+---
+
+## 🧩 七、典型应用场景
+
+| 场景                        | 描述                                       |
+| --------------------------- | ------------------------------------------ |
+| **嵌入 H5 页面**            | 常用于混合开发（Hybrid App）               |
+| **展示富文本内容**          | Markdown / 富文本编辑结果                  |
+| **加载第三方页面**          | 例如支付页、授权页、帮助中心               |
+| **小程序容器 / Web 工具页** | 内部快速加载 Web 工具或表单页              |
+| **渐进式迁移**              | 从 H5 逐步迁到 RN 时，部分页面仍用 WebView |
+
+---
+
+## 🔐 八、安全建议
+
+1. 禁止加载外部不可信的 JS；
+2. 不暴露敏感数据给网页；
+3. 使用 HTTPS；
+4. 若加载本地文件，设置 `originWhitelist={['*']}` 时需谨慎；
+5. 对所有消息通信进行 JSON 格式校验。
+
+---
+
+## 🧱 九、扩展：高级用法
+
+- **`startInLoadingState` + `renderLoading`**：自定义加载中动画
+- **`injectedJavaScriptBeforeContentLoaded`**：在 DOMContentLoaded 前注入 JS
+- **`mediaPlaybackRequiresUserAction={false}`**：自动播放视频
+- **`allowFileAccess` / `allowUniversalAccessFromFileURLs`**：控制文件访问安全
+- **`pullToRefreshEnabled`**（Android）支持下拉刷新
+
+---
+
+## 🧭 十、总结一句话
+
+> ✅ **React Native WebView = 原生 WebView 的统一封装 + JS 通信桥**
+> 它让你在 RN 中嵌入网页，同时与网页进行双向交互，是 Hybrid App 的核心组件。
+
+---
+
+如果你愿意，我可以帮你写一个实际示例：
+📱“React Native WebView 调用网页函数 & 网页反调 RN 的完整双向通信示例”。
+
+是否需要我帮你写一个这样的 demo？

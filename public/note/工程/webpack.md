@@ -1,4 +1,4 @@
-# webpack
+# webpack 优化
 
 在 React 项目中，合理配置和优化 Webpack 是提升应用性能、缩短加载时间、改善开发体验的关键。以下是针对 React 项目中 Webpack 的优化建议，涵盖构建性能、打包体积和开发体验等方面：
 
@@ -169,15 +169,3 @@ devtool: 'source-map',
 
 [1]: https://www.dhiwise.com/post/how-to-optimize-react-app-performance-with-webpack-5?utm_source=chatgpt.com "Webpack 5 Developer's Guide: Optimize React App Performance"
 [2]: https://muhammedcuma.medium.com/optimizing-react-performance-configuring-webpack-for-frontend-development-and-image-optimization-eb729d11e94c?utm_source=chatgpt.com "Optimizing React Performance: Configuring Webpack for Frontend ..."
-
-# vite
-
-# babel
-
-# 打包优化
-
-# loader
-
-# plugin
-
-#
