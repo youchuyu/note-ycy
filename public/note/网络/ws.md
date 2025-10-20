@@ -1,3 +1,383 @@
+# websocket
+
+好的，关于 WebSocket 的使用，我将为您提供一个从基础概念到实际应用的全面介绍。
+
+## 一、什么是 WebSocket？
+
+WebSocket 是一种在单个 TCP 连接上进行**全双工通信**的网络协议。它解决了 HTTP 协议在实时通信方面的局限性。
+
+### 与传统 HTTP 的区别：
+
+- **HTTP**：单向请求-响应模式，客户端发起请求，服务器返回响应
+- **WebSocket**：双向持久连接，服务器可以主动向客户端推送数据
+
+## 二、WebSocket 的核心特点
+
+1. **全双工通信**：客户端和服务器可以同时发送和接收数据
+2. **低延迟**：建立连接后，数据传输无需每次握手
+3. **减少开销**：数据帧头部很小，适合高频次通信
+4. **跨域支持**：内置支持跨域通信
+
+## 三、WebSocket 的基本使用
+
+### 1. 创建 WebSocket 连接
+
+```javascript
+// 创建 WebSocket 连接
+const socket = new WebSocket("ws://localhost:8080");
+
+// 如果是加密连接，使用 wss
+// const socket = new WebSocket('wss://api.example.com');
+```
+
+### 2. 监听连接事件
+
+```javascript
+// 连接建立成功
+socket.addEventListener("open", (event) => {
+  console.log("WebSocket 连接已建立");
+  // 连接建立后可以发送数据
+  socket.send("Hello Server!");
+});
+
+// 接收服务器消息
+socket.addEventListener("message", (event) => {
+  console.log("收到服务器消息:", event.data);
+  // 通常数据是 JSON 格式，需要解析
+  try {
+    const data = JSON.parse(event.data);
+    console.log("解析后的数据:", data);
+  } catch (e) {
+    console.log("原始数据:", event.data);
+  }
+});
+
+// 连接关闭
+socket.addEventListener("close", (event) => {
+  console.log("WebSocket 连接已关闭", event.code, event.reason);
+});
+
+// 错误处理
+socket.addEventListener("error", (event) => {
+  console.error("WebSocket 错误:", event);
+});
+```
+
+### 3. 发送数据
+
+```javascript
+// 发送文本数据
+socket.send("简单的文本消息");
+
+// 发送 JSON 数据
+const message = {
+  type: "chat",
+  content: "Hello World!",
+  timestamp: Date.now(),
+};
+socket.send(JSON.stringify(message));
+
+// 发送二进制数据
+const buffer = new ArrayBuffer(16);
+socket.send(buffer);
+```
+
+### 4. 关闭连接
+
+```javascript
+// 正常关闭连接
+socket.close(1000, "正常关闭");
+
+// 常用的关闭代码：
+// 1000 - 正常关闭
+// 1001 - 端点离开
+// 1002 - 协议错误
+// 1003 - 不接受的数据类型
+```
+
+## 四、服务端实现示例
+
+### Node.js + ws 库示例
+
+```javascript
+const WebSocket = require("ws");
+
+// 创建 WebSocket 服务器
+const wss = new WebSocket.Server({ port: 8080 });
+
+// 存储所有连接的客户端
+const clients = new Set();
+
+wss.on("connection", (ws, request) => {
+  console.log("新的客户端连接");
+  clients.add(ws);
+
+  // 获取客户端 IP
+  const clientIP = request.socket.remoteAddress;
+
+  // 向客户端发送欢迎消息
+  ws.send(
+    JSON.stringify({
+      type: "welcome",
+      message: "连接成功",
+      timestamp: Date.now(),
+    })
+  );
+
+  // 广播新用户加入（给所有客户端）
+  broadcast(
+    {
+      type: "user_joined",
+      message: `新用户加入，当前在线: ${clients.size}`,
+      timestamp: Date.now(),
+    },
+    ws
+  ); // 排除自己
+
+  // 接收客户端消息
+  ws.on("message", (data) => {
+    console.log("收到客户端消息:", data.toString());
+
+    try {
+      const message = JSON.parse(data);
+
+      // 处理不同类型的消息
+      switch (message.type) {
+        case "chat":
+          // 广播聊天消息给所有客户端
+          broadcast({
+            type: "chat",
+            user: clientIP,
+            content: message.content,
+            timestamp: Date.now(),
+          });
+          break;
+
+        case "ping":
+          // 响应心跳包
+          ws.send(
+            JSON.stringify({
+              type: "pong",
+              timestamp: Date.now(),
+            })
+          );
+          break;
+      }
+    } catch (error) {
+      console.error("消息解析错误:", error);
+    }
+  });
+
+  // 连接关闭
+  ws.on("close", () => {
+    console.log("客户端断开连接");
+    clients.delete(ws);
+
+    // 广播用户离开
+    broadcast({
+      type: "user_left",
+      message: `用户离开，当前在线: ${clients.size}`,
+      timestamp: Date.now(),
+    });
+  });
+
+  // 错误处理
+  ws.on("error", (error) => {
+    console.error("WebSocket 错误:", error);
+  });
+});
+
+// 广播消息给所有客户端
+function broadcast(message, excludeWs = null) {
+  const data = JSON.stringify(message);
+  clients.forEach((client) => {
+    if (client !== excludeWs && client.readyState === WebSocket.OPEN) {
+      client.send(data);
+    }
+  });
+}
+
+console.log("WebSocket 服务器运行在 ws://localhost:8080");
+```
+
+## 五、高级特性与最佳实践
+
+### 1. 心跳机制（保持连接活跃）
+
+```javascript
+class WebSocketManager {
+  constructor(url) {
+    this.url = url;
+    this.socket = null;
+    this.pingInterval = null;
+    this.reconnectAttempts = 0;
+    this.maxReconnectAttempts = 5;
+
+    this.connect();
+  }
+
+  connect() {
+    this.socket = new WebSocket(this.url);
+
+    this.socket.addEventListener("open", () => {
+      console.log("连接成功");
+      this.reconnectAttempts = 0;
+      this.startHeartbeat();
+    });
+
+    this.socket.addEventListener("message", (event) => {
+      this.handleMessage(event.data);
+    });
+
+    this.socket.addEventListener("close", () => {
+      console.log("连接断开");
+      this.stopHeartbeat();
+      this.attemptReconnect();
+    });
+
+    this.socket.addEventListener("error", (error) => {
+      console.error("连接错误:", error);
+    });
+  }
+
+  startHeartbeat() {
+    this.pingInterval = setInterval(() => {
+      if (this.socket.readyState === WebSocket.OPEN) {
+        this.send({ type: "ping" });
+      }
+    }, 30000); // 每30秒发送一次心跳
+  }
+
+  stopHeartbeat() {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
+  }
+
+  attemptReconnect() {
+    if (this.reconnectAttempts < this.maxReconnectAttempts) {
+      this.reconnectAttempts++;
+      const delay = Math.min(1000 * this.reconnectAttempts, 30000);
+
+      console.log(
+        `${delay}ms后尝试重连... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`
+      );
+
+      setTimeout(() => {
+        this.connect();
+      }, delay);
+    } else {
+      console.error("达到最大重连次数，停止重连");
+    }
+  }
+
+  send(data) {
+    if (this.socket.readyState === WebSocket.OPEN) {
+      this.socket.send(JSON.stringify(data));
+    } else {
+      console.error("WebSocket 未连接，无法发送消息");
+    }
+  }
+
+  handleMessage(data) {
+    try {
+      const message = JSON.parse(data);
+
+      switch (message.type) {
+        case "pong":
+          console.log("收到心跳响应");
+          break;
+        case "chat":
+          this.onChatMessage(message);
+          break;
+        default:
+          console.log("未知消息类型:", message.type);
+      }
+    } catch (error) {
+      console.error("消息处理错误:", error);
+    }
+  }
+
+  onChatMessage(message) {
+    // 处理聊天消息
+    console.log("收到聊天消息:", message);
+  }
+
+  close() {
+    this.stopHeartbeat();
+    this.socket.close(1000, "用户主动关闭");
+  }
+}
+
+// 使用示例
+const wsManager = new WebSocketManager("ws://localhost:8080");
+```
+
+### 2. 消息协议设计
+
+```javascript
+// 定义消息类型
+const MessageType = {
+  AUTH: "auth", // 认证
+  CHAT: "chat", // 聊天
+  NOTIFICATION: "notification", // 通知
+  HEARTBEAT: "heartbeat", // 心跳
+  ERROR: "error", // 错误
+};
+
+// 创建消息工厂
+class MessageFactory {
+  static createAuth(token) {
+    return {
+      type: MessageType.AUTH,
+      token,
+      timestamp: Date.now(),
+    };
+  }
+
+  static createChat(content, roomId) {
+    return {
+      type: MessageType.CHAT,
+      content,
+      roomId,
+      timestamp: Date.now(),
+    };
+  }
+
+  static createHeartbeat() {
+    return {
+      type: MessageType.HEARTBEAT,
+      timestamp: Date.now(),
+    };
+  }
+}
+
+// 使用
+const authMessage = MessageFactory.createAuth("user-token-123");
+socket.send(JSON.stringify(authMessage));
+```
+
+## 六、使用场景
+
+1. **实时聊天应用**
+2. **在线游戏**
+3. **股票行情推送**
+4. **协同编辑工具**
+5. **实时监控仪表盘**
+6. **在线拍卖/竞拍**
+7. **多人视频会议**
+
+## 七、注意事项
+
+1. **连接稳定性**：网络波动可能导致连接断开，需要重连机制
+2. **安全性**：使用 WSS（WebSocket Secure）进行加密传输
+3. **性能考虑**：避免频繁发送小数据包，可以合并发送
+4. **浏览器兼容性**：现代浏览器都支持 WebSocket
+5. **服务器负载**：大量长连接会占用服务器资源
+
+WebSocket 为现代 Web 应用提供了强大的实时通信能力，是构建交互式、实时应用的理想选择。
+
 # 常见问题汇总
 
 在前端开发和网络通信领域，WebSocket 是一个常被问及的面试主题。以下是一些常见的 WebSocket 面试题及其简要解答，帮助你更好地准备相关面试：

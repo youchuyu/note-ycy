@@ -89,3 +89,174 @@ handleChangeFormData("gender", "male"); // 错误: "gender" 不是 "name"
 
 - **第一种实现**：更加灵活，适用于你希望在同一个函数中支持多种不同 `key` 的情况。
 - **第二种实现**：适用于你需要定义一个接口，并希望函数使用一个固定的泛型类型（即为整个接口提供统一的 `T` 类型）。
+
+# TS enum 替代方案
+
+非常好的问题 👍
+这个其实是很多 TypeScript 项目（尤其是 React、前端 SDK、或需要转译成 JS 的库）里经常遇到的痛点——
+👉 **enum 不兼容某些打包器 / 运行时 / JSON 序列化**，或被要求不用 `enum`（比如 eslint 规则：`no-restricted-syntax`）。
+
+---
+
+## 🔍 一、为什么有时不建议用 `enum`
+
+主要原因：
+
+- **编译后生成额外代码**（尤其是数字枚举）；
+- **Tree-shaking 无效**；
+- **无法与 JSON 直接兼容**；
+- **在前端库中增加包体积**；
+- **在纯类型场景下反而不如字面量对象**。
+
+---
+
+## ✅ 替代方案 1：`const object + typeof`（推荐 ✅）
+
+这是最常见、最推荐的替代方案，兼具 **类型安全** + **运行时值**。
+
+```ts
+export const Status = {
+  Idle: "idle",
+  Loading: "loading",
+  Success: "success",
+  Error: "error",
+} as const;
+
+export type Status = (typeof Status)[keyof typeof Status];
+```
+
+**使用：**
+
+```ts
+function setStatus(status: Status) {
+  console.log(status);
+}
+
+setStatus(Status.Loading); // ✅ OK
+setStatus("loading"); // ✅ OK
+setStatus("wrong"); // ❌ 类型报错
+```
+
+**优点：**
+
+- 运行时是普通对象 ✅
+- 编译后无多余代码 ✅
+- 可直接用于 JSON、React props ✅
+- 类型自动推断出联合字面量 ✅
+
+---
+
+## ✅ 替代方案 2：联合字面量类型
+
+如果你不需要运行时值（只是做类型约束），可以直接写联合类型。
+
+```ts
+export type Status = 'idle' | 'loading' | 'success' | 'error';
+
+function setStatus(status: Status) { ... }
+```
+
+**优点：**
+
+- 最轻量、最纯类型方式
+- 不会在编译产物中出现任何额外代码
+
+**缺点：**
+
+- 无法在运行时使用（例如遍历所有状态）
+
+---
+
+## ✅ 替代方案 3：字符串字典 + keyof 类型
+
+如果需要能动态遍历 key，可以用这种：
+
+```ts
+export const StatusMap = {
+  Idle: "idle",
+  Loading: "loading",
+  Success: "success",
+  Error: "error",
+};
+
+export type Status = keyof typeof StatusMap; // 'Idle' | 'Loading' | 'Success' | 'Error'
+```
+
+**使用：**
+
+```ts
+function handleStatus(status: Status) {
+  console.log(StatusMap[status]);
+}
+```
+
+---
+
+## ✅ 替代方案 4：`string union helper`（工具函数封装）
+
+可以封装一个辅助函数来快速定义枚举：
+
+```ts
+function createEnum<T extends string>(...values: T[]) {
+  return Object.freeze(
+    values.reduce((acc, v) => {
+      acc[v] = v;
+      return acc;
+    }, {} as Record<T, T>)
+  );
+}
+
+export const Status = createEnum("idle", "loading", "success", "error");
+export type Status = keyof typeof Status;
+```
+
+---
+
+## ✅ 替代方案 5：使用第三方工具库
+
+一些库也提供了更安全、更优雅的枚举替代方案，比如：
+
+- [`ts-enum-util`](https://www.npmjs.com/package/ts-enum-util)
+- [`const-enum`](https://www.typescriptlang.org/docs/handbook/enums.html#const-enums)（⚠️ 注意编译选项 `preserveConstEnums`）
+- [`zod`](https://zod.dev/) — 可以定义 `z.enum(['a', 'b'])` 同时做运行时校验
+
+```ts
+import { z } from "zod";
+export const StatusSchema = z.enum(["idle", "loading", "success", "error"]);
+export type Status = z.infer<typeof StatusSchema>;
+```
+
+---
+
+## 🧠 总结对比
+
+| 方案            | 是否有运行时值 | 是否类型安全 | 是否易于 JSON | 是否推荐           |
+| --------------- | -------------- | ------------ | ------------- | ------------------ |
+| `enum`          | ✅             | ✅           | ❌            | ❌（不推荐前端用） |
+| `as const` 对象 | ✅             | ✅           | ✅            | ✅✅✅             |
+| 联合类型        | ❌             | ✅           | ✅            | ✅                 |
+| 字典 + keyof    | ✅             | ✅           | ✅            | ✅                 |
+| zod / 工具函数  | ✅             | ✅           | ✅            | ✅（类型+校验）    |
+
+---
+
+💡 **结论推荐：**
+在现代 TypeScript 项目中，**最通用的替代方案是：**
+
+```ts
+export const MyEnum = {
+  Foo: "foo",
+  Bar: "bar",
+} as const;
+export type MyEnum = (typeof MyEnum)[keyof typeof MyEnum];
+```
+
+---
+
+是否希望我帮你写一个通用的 `createEnum` 工具函数（带类型推断 + 自动生成类型）？
+可以像这样用：
+
+```ts
+const Status = createEnum("idle", "loading", "success");
+type Status = EnumType<typeof Status>;
+```
