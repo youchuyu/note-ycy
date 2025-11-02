@@ -1595,3 +1595,351 @@ const handler = useCallback(() => console.log(count), [count]);
 ---
 
 是否希望我帮你画一张「useCallback vs useMemoizedFn」的执行时序图？可以清楚展示闭包捕获和 ref 动态引用的区别。
+
+# diff
+
+React 的 **Diff 算法（Reconciliation / Fiber Diffing）** 是 React 高性能渲染的核心机制之一。它解决的关键问题是：**当组件的状态或属性变化时，React 如何高效地找出哪些部分需要更新并最小化 DOM 操作。**
+
+---
+
+## 一、背景：为什么需要 Diff 算法
+
+在浏览器中，操作 **DOM** 是昂贵的。如果直接对整个视图进行重新渲染，性能会非常差。
+因此，React 采用 **虚拟 DOM（Virtual DOM）** 的概念：
+
+1. 每次渲染都会生成一个新的虚拟 DOM 树；
+2. React 比较新旧虚拟 DOM 的差异（Diff）；
+3. 最后只对有变化的节点执行最小量的真实 DOM 更新。
+
+---
+
+## 二、Diff 算法的三大原则
+
+React 采用了一套 **启发式算法**（Heuristic Diffing），牺牲最坏情况下的性能换取平均性能的高效性。
+算法基于三个核心假设：
+
+1. **不同类型的节点产生不同的树结构**
+
+   - 如果两个元素类型不同（如 `<div>` → `<span>`），React 会销毁旧节点并创建新节点。
+   - 例如：
+
+     ```jsx
+     <div /> → <span /> // 整个DOM节点被替换
+     ```
+
+2. **通过 key 区分同层级的子节点**
+
+   - 当列表结构发生变化时（如添加、删除、重排），React 通过 **key 属性** 判断节点是否复用。
+   - 没有稳定 key 会导致错误的复用或全部重建，造成性能浪费或状态错乱。
+   - 例如：
+
+     ```jsx
+     {
+       items.map((item) => <li key={item.id}>{item.name}</li>);
+     }
+     ```
+
+3. **只在同一层级比较，不做跨层级 Diff**
+
+   - React 不会比较跨层级的节点（例如把 `<div><p></p></div>` 改成 `<p><div></div></p>` 时，会整棵树销毁重建）。
+
+这些规则使得 React 的 Diff 从 `O(n^3)`（传统树 diff 的复杂度）简化为 **O(n)**。
+
+---
+
+## 三、Diff 算法的具体流程
+
+1. **节点类型比较**
+
+   - `element.type` 相同 → 继续比较属性；
+   - `element.type` 不同 → 销毁旧节点，创建新节点。
+
+2. **属性（props）Diff**
+
+   - 比较新旧 `props`，找出新增、修改或删除的属性；
+   - 更新时只操作有差异的部分。
+
+3. **子节点 Diff**
+
+   - 分为三种情况：
+
+     - 子节点是文本；
+     - 子节点是数组；
+     - 子节点为空。
+
+   - 当为数组时：
+
+     - 优先根据 key 匹配；
+     - 没有 key 时使用索引匹配（容易出错）。
+
+示例：
+
+```jsx
+// 初次渲染
+<ul>
+  <li key="a">A</li>
+  <li key="b">B</li>
+</ul>
+
+// 更新后
+<ul>
+  <li key="b">B</li>
+  <li key="a">A</li>
+</ul>
+```
+
+React 发现 key `a` 和 `b` 对调，只需移动节点，不必重新创建，效率更高。
+
+---
+
+## 四、Fiber 架构下的 Diff
+
+React 16 之后引入 **Fiber 架构**，Diff 过程被拆解成更细粒度的“工作单元”（unit of work），使得渲染可中断和恢复。
+Fiber Diff 的主要变化：
+
+| 特性   | 传统 Diff（React 15） | Fiber Diff（React 16+）  |
+| ------ | --------------------- | ------------------------ |
+| 架构   | 递归（调用栈）        | 链表结构（Fiber nodes）  |
+| 调度   | 同步执行              | 可中断、可恢复           |
+| 优先级 | 无                    | 按优先级调度更新         |
+| 性能   | 大组件卡顿            | 流畅过渡（如动画、输入） |
+
+Fiber 在每个节点上维护：
+
+- `child`、`sibling`、`return` 指针；
+- `alternate` 指针（指向旧 Fiber）；
+- React 比较新旧 Fiber Tree（即虚拟 DOM），生成变更列表（Effect List），最后统一提交更新。
+
+---
+
+## 五、Diff 算法在开发中的应用与影响
+
+### 1. **理解性能优化**
+
+- 当你更新 state 时，React 会触发 diff。
+- 若不合理使用 key、频繁重渲染，会导致不必要的 Diff 计算。
+- 可以使用：
+
+  - `React.memo`：跳过 props 未变化的组件；
+  - `useMemo`、`useCallback`：减少子组件重新创建；
+  - `key`：确保列表 Diff 高效且不出错。
+
+### 2. **正确使用 key**
+
+- `key` 是 React Diff 的核心线索；
+- 使用稳定唯一值（如 `id`），不要用索引；
+- 错误的 key 可能导致组件状态混乱或重复渲染。
+
+### 3. **避免无意义的节点层级变化**
+
+- 改变结构会让 React 销毁整个子树；
+- 尽量保持相同的层级结构，仅变更内容。
+
+### 4. **长列表性能优化**
+
+- React Diff 对大数组依然是 O(n)；
+- 大数据场景可用：
+
+  - 虚拟列表（`react-window`, `react-virtualized`）；
+  - 分块渲染（windowing）；
+  - 分帧更新（requestIdleCallback）。
+
+---
+
+## 六、简单示意图
+
+```
+旧 Virtual DOM         新 Virtual DOM
+    A                        A
+   / \                      / \
+  B   C                    B   D
+
+→ React 比较 A 相同
+→ 比较子节点：B 相同，C → D 更新
+→ 只更新 C → D 的部分
+```
+
+---
+
+## 七、总结
+
+| 特征         | 内容                                |
+| ------------ | ----------------------------------- |
+| 算法目标     | 找出最小差异，减少 DOM 操作         |
+| 核心思想     | 启发式比较（类型、key、层级）       |
+| 时间复杂度   | O(n)                                |
+| Fiber 优化   | 可中断渲染 + 优先级调度             |
+| 开发者需关注 | key、组件粒度、结构稳定性、性能优化 |
+
+---
+
+如果你想，我可以帮你画一个 **React Diff + Fiber 流程图**（从 state 更新到 DOM 提交的全过程），更直观地理解 React 如何“找差异 → 构建 Fiber → 执行更新”。是否需要？
+
+# 渲染和更新 Dom
+
+非常棒的问题 ✅——这其实是很多 React 性能优化讨论的**核心误区**之一。
+
+你问的很精准：
+
+> 子组件重新渲染（重新执行函数）了，那它对应的 DOM 会不会重新渲染？
+
+答案是：
+
+> **不一定。**
+> React 会让子组件重新执行（即重新 render 虚拟 DOM），但**只有当虚拟 DOM 与上一次有差异时，真实 DOM 才会更新。**
+
+---
+
+## 一、拆解这个过程
+
+当子组件“重新渲染”时，React 实际上做的是：
+
+1. 调用子组件函数 → 得到新的虚拟 DOM；
+2. 将新的虚拟 DOM 与旧的虚拟 DOM 做 **Diff 比较**；
+3. 只有发现差异时，才会更新对应的真实 DOM 节点；
+4. 如果完全一致，则跳过真实 DOM 更新。
+
+---
+
+## 二、举个例子 🌰
+
+```jsx
+function Child({ onClick }) {
+  console.log("Child render");
+  return <button onClick={onClick}>Click me</button>;
+}
+
+function Parent() {
+  const [count, setCount] = useState(0);
+  const handleClick = () => setCount(count + 1);
+
+  console.log("Parent render");
+  return (
+    <>
+      <Child onClick={handleClick} />
+      <p>{count}</p>
+    </>
+  );
+}
+```
+
+**过程：**
+
+- `Parent` 每次更新都会新建一个函数 `handleClick`；
+- `Child` 因此重新渲染（执行 `Child()`）；
+- 但 `Child` 返回的 JSX `<button onClick={...}>Click me</button>`
+  和上次的结构完全一致（除了函数引用）；
+- React Diff 比较时发现 DOM 结构一致、属性变化仅为新的函数引用；
+- 因此只会更新事件绑定，不会销毁和重建 `<button>`。
+
+即：
+
+> ✅ 子组件“重新渲染”
+> ❌ 对应的 DOM 不会被销毁重建，只是可能更新属性。
+
+---
+
+## 三、为什么 React 这么设计？
+
+React 的设计目标是：
+
+> **逻辑 render（函数执行） 与 真实 DOM 更新解耦。**
+
+也就是说，React 允许组件函数随时重新执行（甚至几十次），
+但只有当虚拟 DOM 结构或属性真的变化时，才会触发真正的 DOM 变更。
+
+这就是为什么 React 的 **重新渲染** 是安全且轻量的。
+
+---
+
+## 四、深入：Render 与 Commit 阶段的区别
+
+React 的渲染过程分两步：
+
+| 阶段             | 名称                                      | 是否操作真实 DOM |
+| ---------------- | ----------------------------------------- | ---------------- |
+| **Render Phase** | 调用组件函数 → 生成新虚拟 DOM → Diff 对比 | ❌ 不操作 DOM    |
+| **Commit Phase** | 将差异应用到真实 DOM（更新属性、文本等）  | ✅ 操作 DOM      |
+
+当子组件“重新渲染”时：
+
+- React 会进入 **Render Phase**；
+- 若 Diff 结果发现无变化，则跳过 **Commit Phase**；
+- 所以最终真实 DOM 不会重新渲染。
+
+---
+
+## 五、可视化总结
+
+```
+父组件 setState() →
+  ⬇
+子组件重新执行 render()
+  ⬇
+生成新虚拟DOM
+  ⬇
+Diff 新旧虚拟DOM
+  ⬇
+如果不同 → 更新真实DOM
+如果相同 → 跳过更新
+```
+
+---
+
+## 六、再举一个变化例子
+
+```jsx
+function Child({ text }) {
+  console.log("Child render");
+  return <div>{text}</div>;
+}
+
+function Parent() {
+  const [count, setCount] = useState(0);
+  return (
+    <>
+      <Child text="固定文本" />
+      <button onClick={() => setCount((c) => c + 1)}>+1</button>
+    </>
+  );
+}
+```
+
+点击按钮时：
+
+- `Parent` 重新渲染；
+- `Child` 也重新渲染；
+- 但它的输出虚拟 DOM `<div>固定文本</div>` 没有变化；
+- 所以 React **不会更新真实 DOM**。
+
+控制台打印：
+
+```
+Child render  // 执行了，但DOM没变
+```
+
+---
+
+## 七、总结对比表
+
+| 阶段                                      | 子组件 render 执行？ | 子组件 DOM 更新？ | 原因            |
+| ----------------------------------------- | -------------------- | ----------------- | --------------- |
+| props 引用变化但内容相同                  | ✅ 是                | ❌ 否             | Diff 比较无差异 |
+| props 内容变化                            | ✅ 是                | ✅ 是             | Diff 检测到差异 |
+| 父组件重新渲染但 props 没变（React.memo） | ❌ 否                | ❌ 否             | 跳过整个子组件  |
+| 父组件 setState() 不影响子组件 props      | ❌ 否                | ❌ 否             | 未触发 render   |
+
+---
+
+## ✅ 结论
+
+| 问题                                  | 答案                                        |
+| ------------------------------------- | ------------------------------------------- |
+| 子组件重新渲染会导致 DOM 重建吗？     | ❌ 不一定，只有 Diff 检测到差异时才更新     |
+| 函数组件重新执行就意味着 DOM 改变吗？ | ❌ 否，render ≠ DOM 更新                    |
+| React 如何决定是否更新 DOM？          | 通过 Diff 比较虚拟 DOM 的变化               |
+| 如何减少无意义 render？               | 使用 `React.memo`、`useCallback`、`useMemo` |
+
+---
+
+是否希望我帮你画一个简图（展示“函数执行 vs 虚拟 DOM Diff vs 真正 DOM 更新”的关系）？这个图能一眼看懂 React 是如何分层控制渲染的。
