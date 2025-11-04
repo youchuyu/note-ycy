@@ -1217,3 +1217,5 @@ MCP 的核心价值在于让 AI 应用拥有以下能力：
 [11]: https://github.com/modelcontextprotocol?utm_source=chatgpt.com "Model Context Protocol - GitHub"
 [12]: https://www.techradar.com/pro/mcps-biggest-security-loophole-is-identity-fragmentation?utm_source=chatgpt.com "MCP's biggest security loophole is identity fragmentation"
 [13]: https://techcommunity.microsoft.com/blog/educatordeveloperblog/unleashing-the-power-of-model-context-protocol-mcp-a-game-changer-in-ai-integrat/4397564?utm_source=chatgpt.com "Unleashing the Power of Model Context Protocol (MCP)"
+
+# open spec

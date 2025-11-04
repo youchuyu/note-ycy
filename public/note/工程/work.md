@@ -69,7 +69,7 @@ const Row = ({ index, style }) => (
 - 优先使用 **WebP / AVIF**
 - CDN 自动裁剪 & 压缩图片
 
-### 响应式加载：
+### 响应式加载：  
 
 ```tsx
 <img

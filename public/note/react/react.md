@@ -194,6 +194,222 @@ React 18 开启了“并发特性”，比如：
 如果你想更直观理解，我可以帮你画一张
 📊「Fiber 架构下的渲染流程图」，展示“Render → Commit → 替换 Fiber 树”的完整过程，要我画给你看看吗？
 
+# Concurrent Rendering（并发渲染）
+
+非常棒的问题 👍，**Concurrent Rendering（并发渲染）** 是 React 16+ 引入 Fiber 架构后最具代表性的核心机制之一，
+它彻底改变了 React 的渲染模型，从 **“同步、阻塞式渲染”** 演化为 **“可中断、可恢复、可优先级调度的渲染”**。
+
+这部分内容理解清楚后，对你掌握 React 性能机制、`useTransition`、`Suspense` 等特性会非常有帮助。
+下面我来系统地讲解。
+
+---
+
+## 一、背景：为什么要有 Concurrent Rendering？
+
+### 🧩 旧模式（Legacy Rendering）的问题
+
+在 React 16 之前（Reconciler 旧版本中）：
+
+- **渲染是同步、不可中断的**；
+- 一旦开始执行一次更新（比如 `setState()`），React 会一路从顶层组件递归到底层，直到整个虚拟 DOM 计算完成；
+- 如果组件层级很深、节点很多，就可能造成**主线程长时间被 React 占用**；
+- 结果是：
+
+  - 动画卡顿；
+  - 输入延迟；
+  - UI 冻结（即使用户只想看到部分更新）。
+
+👉 所以 React 团队提出：
+**能否让渲染过程变成“可暂停、可分片”的”工作任务”？**
+
+---
+
+## 二、核心思想：让渲染「可中断、可恢复、可分优先级」
+
+Concurrent Rendering 的核心理念是：
+
+> 将渲染任务拆分成可中断的小任务单元（Fiber Units），由 React 自己调度执行。
+
+它的本质是一个 **协作式调度系统（cooperative scheduler）**。
+
+### 💡 举个比喻
+
+旧版 React：
+
+> 像一条单车道的高速路，车（渲染任务）一上路就必须跑完，其他车只能等。
+
+Concurrent React：
+
+> 像一条多车道高速路，有信号灯可以“打断”当前车流，插入更重要的任务（如用户输入）。
+
+---
+
+## 三、核心机制（基于 Fiber 架构）
+
+Fiber 让 React 的渲染过程可拆分为**可中断的工作单元（unit of work）**。
+每个组件对应一个 **Fiber 节点**，其中包含：
+
+- 当前组件的虚拟 DOM 信息；
+- 对应的真实 DOM 引用；
+- 与父节点、兄弟节点、子节点的指针；
+- 更新优先级（lane priority）。
+
+### 👇 流程示意：
+
+1. **Render Phase（可中断）**
+
+   - React 构建新的 Fiber Tree；
+   - 比较旧树（Diff）；
+   - 可以被暂停、中止或重新开始；
+   - 期间不触碰真实 DOM。
+
+2. **Commit Phase（不可中断）**
+
+   - 将 Diff 结果批量提交；
+   - 更新真实 DOM；
+   - 执行副作用（`useEffect`）。
+
+```text
+setState() → 调度任务 → Render Phase（可中断）
+                              ↓
+                 Commit Phase（一次性更新DOM）
+```
+
+---
+
+## 四、React 的优先级调度模型
+
+Concurrent Rendering 允许 React 根据不同任务的重要性分配不同的优先级：
+
+| 类型                      | 优先级 | 示例                 |
+| ------------------------- | ------ | -------------------- |
+| 用户交互（User-blocking） | 最高   | 输入、点击、拖拽     |
+| 过渡更新（Transition）    | 中等   | 路由切换、标签页切换 |
+| 后台任务（Background）    | 低     | 数据加载、列表渲染   |
+| 空闲任务（Idle）          | 最低   | 预加载、预渲染       |
+
+👉 React 会根据任务优先级和浏览器帧时间（`requestIdleCallback` / `MessageChannel`）智能调度渲染。
+
+---
+
+## 五、应用场景：useTransition 与 Suspense
+
+### 1️⃣ `useTransition`：让低优先级渲染更流畅
+
+```jsx
+const [isPending, startTransition] = useTransition();
+
+function handleClick() {
+  startTransition(() => {
+    setTab("chart"); // 比较耗时的更新
+  });
+}
+```
+
+含义：
+
+- React 会优先响应用户输入（高优先级）；
+- 将 `setTab('chart')` 的视图渲染安排到空闲时执行；
+- 避免“点击卡顿”。
+
+### 2️⃣ `Suspense`：并发渲染中的异步占位机制
+
+```jsx
+<Suspense fallback={<Spinner />}>
+  <Profile />
+</Suspense>
+```
+
+- `Profile` 可能在加载数据；
+- React 可以「暂停」当前渲染；
+- 等待数据就绪后恢复；
+- 同时保留旧 UI，提升流畅度。
+
+---
+
+## 六、与传统模式的对比
+
+| 对比项     | 传统（同步渲染） | 并发渲染（Concurrent）            |
+| ---------- | ---------------- | --------------------------------- |
+| 渲染方式   | 一次性递归执行   | 分片执行（可中断）                |
+| 是否可中断 | ❌ 否            | ✅ 是                             |
+| 优先级调度 | ❌ 无            | ✅ 按任务优先级                   |
+| 用户交互   | 可能卡顿         | 更流畅                            |
+| 数据加载   | 一次性阻塞       | 可等待（Suspense）                |
+| 典型特性   | React 15 及以前  | React 18+ 默认启用（Strict Mode） |
+
+---
+
+## 七、底层调度器：React Scheduler
+
+React 通过一个内部的 **Scheduler（调度器）** 来分配任务。
+核心思想：
+
+```js
+while (thereAreTasks) {
+  if (shouldYield()) {
+    pauseWork(); // 让出主线程
+  } else {
+    performUnitOfWork(); // 继续渲染
+  }
+}
+```
+
+其中 `shouldYield()` 会检查浏览器帧时间（大约 16ms 一帧），
+让 React 在空闲时继续渲染，避免阻塞主线程。
+
+---
+
+## 八、并发渲染不是并行（Important!）
+
+很多人误解“Concurrent Rendering = 多线程渲染”，其实不对。
+
+| 概念                   | 含义                                 |
+| ---------------------- | ------------------------------------ |
+| **并发（Concurrent）** | 任务可被中断、重启，逻辑上“同时进行” |
+| **并行（Parallel）**   | 任务真正同时执行（多线程）           |
+
+React 的 Concurrent 模式本质仍是单线程执行，只是利用 **时间切片（Time Slicing）** 实现逻辑并发。
+
+---
+
+## 九、总结思维导图 🧠
+
+```
+React Concurrent Rendering
+ ├─ 背景：同步渲染卡顿
+ ├─ 核心理念：可中断 + 可恢复 + 优先级
+ ├─ Fiber：将组件树拆为可调度单元
+ ├─ Scheduler：控制时间片执行
+ ├─ Render Phase（可中断）
+ ├─ Commit Phase（一次性更新DOM）
+ ├─ 应用：
+ │    ├─ useTransition
+ │    └─ Suspense
+ ├─ 结果：
+ │    ├─ 更流畅交互
+ │    └─ 更灵活渲染
+ └─ 注意：并发 ≠ 多线程
+```
+
+---
+
+## ✅ 总结要点
+
+| 项目     | 内容                                  |
+| -------- | ------------------------------------- |
+| 核心目标 | 提升交互流畅度、避免阻塞主线程        |
+| 实现基础 | Fiber 架构（任务可拆分）              |
+| 调度机制 | Scheduler 时间切片 + 优先级队列       |
+| 渲染阶段 | Render（可中断） + Commit（不可中断） |
+| 核心特性 | useTransition、Suspense               |
+| 本质区别 | 并发 ≠ 并行，多任务调度而非多线程     |
+
+---
+
+是否希望我帮你画一个「Concurrent Rendering 流程图」（展示从 `setState` 到 Render 阶段被中断、恢复、提交的完整过程）？
+这个图可以非常直观地看出 React 是如何在浏览器空闲时“断点续渲染”的。
+
 # 版本更新
 
 截至 2025 年，React 的两个重要版本更新是 **React 18** 和 **React 19**，它们分别于 2022 年和 2024 年发布。以下是这两个版本的主要特性和更新：

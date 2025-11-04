@@ -1,486 +1,200 @@
+# SSE
 
-# sse
+## 1. SSE 的概念
 
-好的，我来详细介绍 SSE（Server-Sent Events）的使用。SSE 是一种允许服务器向客户端主动推送数据的 Web 技术。
+**SSE（Server-Sent Events）** 是一种 **单向实时通信技术**，允许服务器向浏览器推送实时数据，而浏览器不需要频繁轮询。
 
-## 一、什么是 SSE？
+- 由 HTML5 标准定义。
+- 浏览器通过 JavaScript 的 `EventSource` 对象订阅服务器发送的事件。
+- 典型应用：实时消息、股票行情、通知、日志推送等。
 
-SSE（Server-Sent Events）是一种基于 HTTP 的服务器向客户端推送数据的技术。与 WebSocket 不同，SSE 是**单向通信** - 只能从服务器向客户端发送数据。
+> 简单理解：浏览器主动向服务器订阅，服务器主动推送数据给浏览器，浏览器无需再次请求。
 
-### 与 WebSocket 的对比：
+---
 
-| 特性         | SSE                     | WebSocket             |
-| ------------ | ----------------------- | --------------------- |
-| 通信方向     | 服务器 → 客户端（单向） | 双向通信              |
-| 协议         | HTTP                    | 独立的 WebSocket 协议 |
-| 重连机制     | 内置自动重连            | 需要手动实现          |
-| 数据传输     | 文本数据                | 文本和二进制数据      |
-| 浏览器兼容性 | 良好                    | 优秀                  |
+## 2. SSE 的工作原理
 
-## 二、SSE 的核心特点
+SSE 基于 **HTTP 协议**，利用 **持久连接（HTTP 长连接）** 进行数据传输。
 
-1. **单向通信**：服务器主动向客户端推送数据
-2. **基于 HTTP**：使用标准 HTTP 协议，无需特殊服务器配置
-3. **自动重连**：浏览器内置重连机制
-4. **简单易用**：API 简单，实现成本低
-5. **文本传输**：适合推送文本格式的数据
+1. **浏览器发起请求**：
 
-## 三、客户端使用
+   ```javascript
+   const evtSource = new EventSource("/events");
+   ```
 
-### 1. 创建 SSE 连接
+2. **服务器响应请求**：
 
-```javascript
-// 创建 EventSource 连接
-const eventSource = new EventSource("/api/events");
+   - 服务器返回响应头：
 
-// 或者带有配置选项（如果需要认证）
-const eventSource = new EventSource("/api/events", {
-  withCredentials: true, // 发送 cookies
-});
+     ```
+     Content-Type: text/event-stream
+     Cache-Control: no-cache
+     Connection: keep-alive
+     ```
+
+   - 浏览器保持连接不关闭。
+
+3. **服务器推送数据**：
+
+   - 数据格式是文本，每条消息以 `\n\n` 分隔。
+   - 每条消息可以包含字段：
+
+     ```
+     data: Hello SSE\n\n
+     id: 123\n
+     event: message\n
+     retry: 5000\n
+     ```
+
+4. **浏览器接收事件**：
+
+   ```javascript
+   evtSource.onmessage = function (event) {
+     console.log("接收到数据:", event.data);
+   };
+   ```
+
+---
+
+## 3. SSE 消息格式
+
+SSE 消息遵循 **text/event-stream** 格式，常用字段：
+
+| 字段    | 说明                                                              |
+| ------- | ----------------------------------------------------------------- |
+| `data`  | 消息内容，多行以换行符分隔，每条 `data:` 都会被拼接为一条完整消息 |
+| `id`    | 消息 ID，用于客户端断线重连后继续接收                             |
+| `event` | 自定义事件类型，浏览器可通过 `addEventListener` 监听              |
+| `retry` | 自动重连间隔时间（毫秒）                                          |
+
+**示例：**
+
+```
+id: 1
+event: message
+data: Hello SSE
+data: 这是第二行
+retry: 3000
+
 ```
 
-### 2. 监听事件
+---
+
+## 4. SSE 的特点
+
+| 特性              | 描述                                                            |
+| ----------------- | --------------------------------------------------------------- |
+| 单向              | 服务器向客户端推送数据，客户端不能直接通过 SSE 发送数据给服务器 |
+| 长连接            | HTTP 连接保持开启，减少轮询开销                                 |
+| 自动重连          | 浏览器会在连接断开后自动重连（可通过 `retry` 设置间隔）         |
+| 支持事件类型      | 可定义自定义事件，区分不同数据类型                              |
+| 文本传输          | 数据是纯文本（可用 JSON 序列化发送）                            |
+| 与 WebSocket 区别 | SSE 是单向、基于 HTTP，WebSocket 是双向、基于 TCP               |
+
+---
+
+## 5. SSE 的使用方法
+
+### 5.1 浏览器端
 
 ```javascript
-// 监听默认的 message 事件
-eventSource.addEventListener("message", (event) => {
-  const data = JSON.parse(event.data);
-  console.log("收到消息:", data);
+// 创建 EventSource 对象
+const evtSource = new EventSource("/events");
 
-  // 更新页面内容
-  document.getElementById("messages").innerHTML += `<div>${
-    data.message
-  } - ${new Date(data.timestamp).toLocaleTimeString()}</div>`;
-});
+// 默认监听 message 事件
+evtSource.onmessage = (event) => {
+  console.log("接收到数据:", event.data);
+};
 
 // 监听自定义事件
-eventSource.addEventListener("notification", (event) => {
-  const data = JSON.parse(event.data);
-  console.log("通知:", data);
-
-  // 显示通知
-  showNotification(data.title, data.message);
+evtSource.addEventListener("update", (event) => {
+  console.log("更新事件:", event.data);
 });
 
-// 监听连接打开事件
-eventSource.addEventListener("open", (event) => {
-  console.log("SSE 连接已建立");
-  document.getElementById("status").textContent = "已连接";
-});
-
-// 监听错误事件
-eventSource.addEventListener("error", (event) => {
-  console.error("SSE 连接错误:", event);
-
-  // 根据 eventSource.readyState 判断状态
-  if (eventSource.readyState === EventSource.CLOSED) {
-    document.getElementById("status").textContent = "连接已关闭";
-  } else {
-    document.getElementById("status").textContent = "连接错误，重连中...";
-  }
-});
-```
-
-### 3. 连接状态
-
-```javascript
-// 检查连接状态
-console.log("连接状态:", eventSource.readyState);
-
-// readyState 值：
-// 0 - CONNECTING (连接中)
-// 1 - OPEN (已打开)
-// 2 - CLOSED (已关闭)
-
-// 关闭连接
-function closeConnection() {
-  eventSource.close();
-  console.log("SSE 连接已手动关闭");
-}
-```
-
-## 四、服务端实现
-
-### 1. Node.js + Express 示例
-
-```javascript
-const express = require("express");
-const app = express();
-
-// SSE 路由
-app.get("/api/events", (req, res) => {
-  // 设置 SSE 必需的响应头
-  res.writeHead(200, {
-    "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache",
-    Connection: "keep-alive",
-    "Access-Control-Allow-Origin": "*", // 根据需求调整 CORS
-  });
-
-  console.log("客户端连接已建立");
-
-  // 发送连接成功的消息
-  sendEvent(res, "connected", {
-    message: "连接成功",
-    timestamp: Date.now(),
-  });
-
-  // 定时发送数据
-  let counter = 0;
-  const intervalId = setInterval(() => {
-    counter++;
-
-    // 发送普通消息
-    sendEvent(res, "message", {
-      id: counter,
-      message: `这是第 ${counter} 条消息`,
-      timestamp: Date.now(),
-    });
-
-    // 每5条消息发送一个通知
-    if (counter % 5 === 0) {
-      sendEvent(res, "notification", {
-        title: "系统通知",
-        message: `已发送 ${counter} 条消息`,
-        type: "info",
-        timestamp: Date.now(),
-      });
-    }
-
-    // 测试 20 次后停止
-    if (counter >= 20) {
-      sendEvent(res, "complete", {
-        message: "数据发送完成",
-        timestamp: Date.now(),
-      });
-      clearInterval(intervalId);
-      res.end(); // 结束连接
-    }
-  }, 2000); // 每2秒发送一次
-
-  // 客户端断开连接时清理
-  req.on("close", () => {
-    console.log("客户端断开连接");
-    clearInterval(intervalId);
-    res.end();
-  });
-
-  req.on("error", (err) => {
-    console.error("连接错误:", err);
-    clearInterval(intervalId);
-    res.end();
-  });
-});
-
-// 发送事件的辅助函数
-function sendEvent(res, event = "message", data) {
-  const eventData = typeof data === "string" ? data : JSON.stringify(data);
-
-  // SSE 数据格式
-  res.write(`event: ${event}\n`); // 事件类型
-  res.write(`data: ${eventData}\n`); // 数据内容
-  res.write(`id: ${Date.now()}\n`); // 事件 ID（可选）
-  res.write(`retry: 5000\n`); // 重连时间（毫秒，可选）
-  res.write("\n"); // 空行表示事件结束
-}
-
-// 启动服务器
-const PORT = 3000;
-app.listen(PORT, () => {
-  console.log(`服务器运行在 http://localhost:${PORT}`);
-});
-```
-
-### 2. 更完整的服务端实现（支持多客户端）
-
-```javascript
-const express = require("express");
-const app = express();
-
-// 存储所有连接的客户端
-const clients = new Set();
-
-app.get("/api/events", (req, res) => {
-  res.writeHead(200, {
-    "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache",
-    Connection: "keep-alive",
-    "Access-Control-Allow-Origin": "*",
-  });
-
-  console.log(`新的客户端连接，当前连接数: ${clients.size + 1}`);
-
-  // 将当前响应对象存入客户端集合
-  clients.add(res);
-
-  // 发送欢迎消息
-  sendToClient(res, "connected", {
-    message: "欢迎连接 SSE 服务",
-    clientCount: clients.size,
-    timestamp: Date.now(),
-  });
-
-  // 广播新客户端加入（给所有客户端）
-  broadcast(
-    "user_joined",
-    {
-      message: `新用户加入，当前在线用户: ${clients.size}`,
-      timestamp: Date.now(),
-    },
-    res
-  ); // 排除当前客户端
-
-  // 客户端断开连接时清理
-  req.on("close", () => {
-    console.log("客户端断开连接");
-    clients.delete(res);
-
-    // 广播用户离开
-    broadcast("user_left", {
-      message: `用户离开，当前在线用户: ${clients.size}`,
-      timestamp: Date.now(),
-    });
-
-    res.end();
-  });
-});
-
-// 向特定客户端发送消息
-function sendToClient(res, event, data) {
-  try {
-    res.write(`event: ${event}\n`);
-    res.write(`data: ${JSON.stringify(data)}\n`);
-    res.write("\n");
-  } catch (error) {
-    console.error("发送消息失败:", error);
-  }
-}
-
-// 广播消息给所有客户端
-function broadcast(event, data, excludeClient = null) {
-  clients.forEach((client) => {
-    if (client !== excludeClient) {
-      sendToClient(client, event, data);
-    }
-  });
-}
-
-// 提供发送消息的 API 端点
-app.post("/api/broadcast", express.json(), (req, res) => {
-  const { message, type = "notification" } = req.body;
-
-  if (!message) {
-    return res.status(400).json({ error: "消息内容不能为空" });
-  }
-
-  const broadcastData = {
-    message,
-    type,
-    timestamp: Date.now(),
-    from: "系统",
-  };
-
-  // 广播给所有客户端
-  broadcast("broadcast", broadcastData);
-
-  res.json({
-    success: true,
-    message: "广播发送成功",
-    clientCount: clients.size,
-  });
-});
-
-// 定时发送系统状态（可选）
-setInterval(() => {
-  const systemStatus = {
-    clientCount: clients.size,
-    memoryUsage: process.memoryUsage(),
-    uptime: process.uptime(),
-    timestamp: Date.now(),
-  };
-
-  broadcast("system_status", systemStatus);
-}, 30000); // 每30秒发送一次系统状态
-
-app.listen(3000, () => {
-  console.log("SSE 服务器运行在 http://localhost:3000");
-});
-```
-
-## 五、SSE 数据格式
-
-SSE 有严格的数据格式要求：
-
-```text
-event: message
-data: 这是一条消息
-id: 12345
-retry: 5000
-
-event: notification
-data: {"title":"通知","content":"这是一条通知"}
-id: 12346
-
-```
-
-- `event`: 事件类型（可选，默认是 `message`）
-- `data`: 数据内容（可以是多行）
-- `id`: 事件 ID（可选，用于重连时恢复）
-- `retry`: 重连时间（毫秒，可选）
-- 空行：表示一个事件结束
-
-## 六、高级用法
-
-### 1. 带认证的 SSE
-
-```javascript
-// 客户端 - 使用带有认证的 SSE
-function createSSEWithAuth(token) {
-  const eventSource = new EventSource(`/api/events?token=${token}`);
-  return eventSource;
-}
-
-// 或者使用更安全的方式（在 Header 中传递）
-async function createSecureSSE() {
-  const response = await fetch("/api/sse-auth", {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${getToken()}`,
-    },
-  });
-
-  // 服务端需要返回一个特殊的 SSE 端点
-  if (response.ok) {
-    const { sseUrl } = await response.json();
-    return new EventSource(sseUrl);
-  }
-  throw new Error("认证失败");
-}
-```
-
-### 2. 错误处理和重连
-
-```javascript
-class SSEManager {
-  constructor(url, options = {}) {
-    this.url = url;
-    this.options = options;
-    this.eventSource = null;
-    this.reconnectAttempts = 0;
-    this.maxReconnectAttempts = 5;
-    this.reconnectDelay = 1000;
-
-    this.connect();
-  }
-
-  connect() {
-    try {
-      this.eventSource = new EventSource(this.url);
-
-      this.eventSource.onopen = () => {
-        console.log("SSE 连接已建立");
-        this.reconnectAttempts = 0;
-        this.onOpen?.();
-      };
-
-      this.eventSource.onmessage = (event) => {
-        this.onMessage?.(event);
-      };
-
-      this.eventSource.onerror = (event) => {
-        console.error("SSE 连接错误");
-        this.onError?.(event);
-
-        if (this.eventSource.readyState === EventSource.CLOSED) {
-          this.attemptReconnect();
-        }
-      };
-
-      // 添加自定义事件监听器
-      if (this.options.events) {
-        this.options.events.forEach((eventName) => {
-          this.eventSource.addEventListener(eventName, (event) => {
-            this.onEvent?.(eventName, event);
-          });
-        });
-      }
-    } catch (error) {
-      console.error("创建 SSE 连接失败:", error);
-      this.attemptReconnect();
-    }
-  }
-
-  attemptReconnect() {
-    if (this.reconnectAttempts < this.maxReconnectAttempts) {
-      this.reconnectAttempts++;
-      const delay = this.reconnectDelay * this.reconnectAttempts;
-
-      console.log(
-        `${delay}ms后尝试重连... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`
-      );
-
-      setTimeout(() => {
-        this.connect();
-      }, delay);
-    } else {
-      console.error("达到最大重连次数，停止重连");
-      this.onMaxReconnectAttempts?.();
-    }
-  }
-
-  close() {
-    if (this.eventSource) {
-      this.eventSource.close();
-      this.eventSource = null;
-    }
-  }
-
-  // 回调函数
-  onOpen = null;
-  onMessage = null;
-  onError = null;
-  onEvent = null;
-  onMaxReconnectAttempts = null;
-}
-
-// 使用示例
-const sseManager = new SSEManager("/api/events", {
-  events: ["notification", "system_status"],
-});
-
-sseManager.onMessage = (event) => {
-  console.log("收到消息:", event.data);
-};
-
-sseManager.onEvent = (eventName, event) => {
-  console.log(`收到自定义事件 ${eventName}:`, event.data);
+// 错误处理
+evtSource.onerror = (err) => {
+  console.error("SSE 错误:", err);
 };
 ```
 
-## 七、使用场景
+### 5.2 服务器端示例（Node.js Express）
 
-1. **实时通知系统** - 新消息提醒、系统通知
-2. **股票行情推送** - 实时价格更新
-3. **新闻推送** - 实时新闻更新
-4. **社交媒体动态** - 新帖子、新关注
-5. **监控仪表盘** - 实时数据展示
-6. **进度更新** - 长时间任务进度报告
-7. **在线用户列表** - 用户上下线状态
+```javascript
+app.get("/events", (req, res) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
 
-## 八、优势和局限性
+  let count = 0;
 
-### 优势：
+  const interval = setInterval(() => {
+    count++;
+    res.write(`data: 服务器推送消息 ${count}\n\n`);
+    if (count >= 5) clearInterval(interval);
+  }, 1000);
 
-- ✅ 简单易用，API 简洁
-- ✅ 自动重连机制
-- ✅ 基于 HTTP，兼容性好
-- ✅ 适合服务器向客户端的单向数据流
+  req.on("close", () => {
+    clearInterval(interval);
+    res.end();
+  });
+});
+```
 
-### 局限性：
+---
 
-- ❌ 只能服务器向客户端推送（单向）
-- ❌ 不支持二进制数据
-- ❌ 最大并发连接数限制（HTTP/1.1 为 6 个）
-- ❌ 部分浏览器不支持（主要是 IE）
+## 6. SSE 的优缺点
 
-SSE 是构建实时应用的轻量级解决方案，特别适合需要服务器主动推送但不需要客户端向服务器发送大量数据的场景。
+### 优点
+
+- **简单易用**：浏览器原生支持，无需额外库。
+- **自动重连**：浏览器会自动断线重连。
+- **轻量**：基于 HTTP，使用现有基础设施，无需升级协议。
+
+### 缺点
+
+- **单向通信**：客户端无法通过 SSE 向服务器发送数据。
+- **HTTP/1.1 长连接限制**：大量用户同时使用时，服务器压力大。
+- **跨域限制**：需要 CORS 支持。
+- **浏览器兼容性**：大部分现代浏览器支持，但 IE 不支持。
+
+---
+
+## 7. SSE 与 WebSocket 对比
+
+| 特性         | SSE                      | WebSocket                |
+| ------------ | ------------------------ | ------------------------ |
+| 通信方向     | 服务器 → 客户端          | 双向                     |
+| 协议         | HTTP                     | TCP/WebSocket            |
+| 浏览器支持   | 原生支持（EventSource）  | 原生支持（WebSocket）    |
+| 自动重连     | 支持                     | 需手动实现               |
+| 传输数据类型 | 文本（需 JSON 序列化）   | 文本/二进制              |
+| 适用场景     | 实时通知、日志、消息推送 | 游戏、聊天、双向实时交互 |
+
+---
+
+## 8. SSE 使用注意事项
+
+1. **保持连接**：服务器要防止连接被中间代理或防火墙关闭，可定期发送空数据：
+
+   ```
+   : keep-alive\n\n
+   ```
+
+2. **CORS 设置**：
+
+   ```http
+   Access-Control-Allow-Origin: *
+   ```
+
+3. **数据大小**：一次发送的数据不要太大，避免浏览器阻塞。
+4. **代理支持**：某些代理可能缓存 SSE 响应，需要设置 `Cache-Control: no-cache`。
+
+---
+
+SSE 是一个 **轻量、单向、易用的实时通信方案**，适合实时推送数据而不需要双向交互的场景。
+
+---
+
+如果你需要，我可以帮你画一张 **SSE 数据流示意图**，清楚展示浏览器和服务器的连接、消息发送和重连机制。
+
+你想让我画吗？
